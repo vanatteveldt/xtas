@@ -2,4 +2,5 @@
 # the server class (see ../server.py).
 
 from .guesslang import guess                    # noqa
+from .semanticize import semanticize            # noqa
 from .test import show_config, trivial_task     # noqa
