@@ -94,3 +94,11 @@ def semanticize(doc):
 @app.task
 def untokenize(tokens):
     return ' '.join(tokens)
+
+@app.task
+def corenlp(doc):
+    # Requires CORENLP_HOME to point to the stanford corenlp folder
+    from .corenlp import parse_text
+    text = fetch(doc)
+    return parse_text(text)
+    

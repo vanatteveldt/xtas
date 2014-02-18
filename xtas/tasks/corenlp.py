@@ -1,0 +1,310 @@
+###########################################################################
+#          (C) Vrije Universiteit, Amsterdam (the Netherlands)            #
+#                                                                         #
+# This file is part of AmCAT - The Amsterdam Content Analysis Toolkit     #
+#                                                                         #
+# AmCAT is free software: you can redistribute it and/or modify it under  #
+# the terms of the GNU Affero General Public License as published by the  #
+# Free Software Foundation, either version 3 of the License, or (at your  #
+# option) any later version.                                              #
+#                                                                         #
+# AmCAT is distributed in the hope that it will be useful, but WITHOUT    #
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or   #
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public     #
+# License for more details.                                               #
+#                                                                         #
+# You should have received a copy of the GNU Affero General Public        #
+# License along with AmCAT.  If not, see <http://www.gnu.org/licenses/>.  #
+###########################################################################
+
+
+"""
+Python interface for the Stanford CoreNLP suite and conversion to xtas/SAF
+"""
+
+import os, sys, time
+import re
+import logging
+import pexpect
+import subprocess
+import collections
+import itertools
+import datetime
+from cStringIO import StringIO
+
+log = logging.getLogger(__name__)
+import threading
+
+PARSER = None
+PARSER_LOCK = threading.Lock()
+
+def parse_text(text):
+    """Use a global/persistent corenlp object to parse the given text"""
+    global PARSER
+    with PARSER_LOCK:
+        if PARSER is None:
+            PARSER = StanfordCoreNLP()
+        parse = PARSER.parse(text)
+    return StanfordCoreNLP.stanford_to_saf(parse)
+
+class StanfordCoreNLP(object):
+
+    corenlp_version = os.environ.get("CORENLP_VERSION", "3.2.0")
+    
+    def __init__(self, timeout=600, **classpath_args):
+        """
+        Start the CoreNLP server as a java process. Arguments are used to locate the correct jar files.
+
+        @param corenlp_path: the directory containing the jar files
+        @param corenlp_version: the yyyy-mm-dd version listed in the jar name
+        @param models_version: if different from the main version, the version date of the models jar
+        @param timeout: Time to wait for a parse before giving up
+        """
+
+        self.timeout = timeout
+        cmd = self.get_command(classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP",
+                               memory="800M",
+                               **classpath_args)
+
+        log.info("Starting the Stanford Core NLP parser.")
+        log.debug("Command: {cmd}".format(**locals()))
+        self._corenlp_process = pexpect.spawn(cmd)
+        self._wait_for_corenlp_init()
+
+    def _wait_for_corenlp_init(self):
+        """Give some progress feedback while waiting for server to initialize"""
+        for module in ["Pos tagger", "NER-all", "NER-muc", "ConLL", "PCFG"]:
+            log.debug("Loading {module}".format(**locals()))
+            i = self._corenlp_process.expect(["done.", "Exception"], timeout=600)
+            if i == 1:
+                log.warn(self._corenlp_process.read())
+                raise Exception("Exception from CoreNLP")
+        log.debug(" ..  Finished loading modules...")
+        self._corenlp_process.expect("Entering interactive shell.")
+        log.info("NLP tools loaded.")
+
+
+    def _get_results(self):
+        """
+        Get the raw results from the corenlp process
+        """
+        copy = open("/tmp/parse_log", "w")
+        buff = StringIO()
+        while True: 
+            try:
+                incoming = self._corenlp_process.read_nonblocking (2000, 1)
+            except pexpect.TIMEOUT:
+                log.debug("Waiting for CoreNLP process; buffer: {!r} ".format(buff.getvalue()))
+                continue
+            # original broke out of loop on EOF, but EOF is unexpected so rather raise exception
+                
+            for ch in incoming:
+                copy.write(ch)
+                if ch == "\n": # return a found line
+                    yield buff.getvalue()
+                    buff.seek(0)
+                    buff.truncate()
+                elif ch not in "\r\x07":
+                    buff.write(ch)
+                    if ch == ">" and buff.getvalue().startswith("NLP>"):
+                        return
+
+    def parse(self, text):
+        """Call the server and return the raw results."""
+        # clean up anything leftover, ie wait until server says nothing in 0.3 seconds
+        while True:
+            try:
+                ch = self._corenlp_process.read_nonblocking(4000, 0.3)
+            except pexpect.TIMEOUT:
+                break
+
+        text = text.replace("\n"," ")
+        self._corenlp_process.sendline(text)
+
+        return self._get_results()
+
+
+    @classmethod
+    def get_command(cls, classname, argstr="",memory=None, **classpath_args):
+        classpath = cls.get_classpath(**classpath_args)
+        memory = "" if memory is None else "-Xmx{memory}".format(**locals())
+        if isinstance(argstr, list):
+            argstr = " ".join(map(str, argstr))
+        return "java {memory} -cp {classpath} {classname} {argstr}".format(**locals())
+
+    @classmethod
+    def get_classpath(cls, corenlp_path=None, corenlp_version=None, models_version=None):
+        if corenlp_path is None:
+            corenlp_path = os.environ["CORENLP_HOME"]
+        if corenlp_version is not None:
+            cls.corenlp_version = corenlp_version
+        if models_version is None:
+            models_version = cls.corenlp_version
+
+        jars = ["stanford-corenlp-{cls.corenlp_version}.jar".format(**locals()),
+                "stanford-corenlp-{models_version}-models.jar".format(**locals()),
+                "joda-time.jar", "xom.jar", "jollyday.jar"]
+        jars = [os.path.join(corenlp_path, jar) for jar in jars]
+
+        # check whether jars exist
+        for jar in jars:
+            if not os.path.exists(jar):
+                raise Exception("Error! Cannot locate {jar}".format(**locals()))
+
+        return ":".join(jars)
+
+    @classmethod
+    def stanford_to_saf(cls, lines):
+        """
+        Convert stanfords 'interactive' text format to saf (dict-of-lists-of-dicts)
+        Unfortunately, stanford cannot return xml in interactive mode, so we need to
+        parse their plain text format
+        """
+        article = SAF()#collections.defaultdict(list)
+        article.header = {'format' : "SAF",
+                          'format-version' : "0.0",
+                          'processed' : [{'module' : "corenlp",
+                                          'module-version': cls.corenlp_version, 
+                                          "started" : datetime.datetime.now().isoformat(),
+                                      }]}
+        lines = iter(lines)
+        lines.next() # skip first line (echo of sentence)
+        _parse_article(article, lines)
+        return article
+
+def _regroups(pattern, text, **kargs):
+    m = re.match(pattern, text, **kargs)
+    if not m: raise Exception("Pattern {pattern!r} did not match text {text!r}".format(**locals()))
+    return m.groups()
+
+class SAF(collections.OrderedDict):
+    """Ordered default dictionary that works via attribute access (e.g. a.tokens instead of a['tokens']"""
+    def __getattr__(self, attr):
+        if attr.startswith("_"):
+            return getattr(super(SAF, self), attr)
+        if attr not in self:
+            self[attr] = []
+        return self[attr]
+    def __setattr__(self, attr, value):
+        if attr.startswith("_"):
+            return super(SAF, self).__setattr__(attr, value)
+        self[attr] = value
+    
+def _parse_article(article, lines):
+    tokens = {} # sentence_no, index -> token
+    while True: # parse one sentence
+        try:
+            line = lines.next()
+        except StopIteration:
+            break # done
+        while not line.strip(): line = lines.next() # skip leading blanks
+        if line == "Coreference set:":
+            break # done parsing sentences
+        sentence_no = int(_regroups("Sentence #\s*(\d+)\s+", line)[0])
+        text = lines.next()
+
+        log.debug("Parsing sentence {sentence_no}: {text!r}".format(**locals()))
+
+        # Parse tokens 
+        for i, s in enumerate(re.findall('\[([^\]]+)\]', lines.next())):
+            wd = dict(re.findall(r"([^=\s]*)=([^=\s]*)", s))
+            tokenid = len(tokens) + 1
+            token = dict(id = tokenid, word=wd['Text'], lemma=wd['Lemma'], pos=wd['PartOfSpeech'],
+                         sentence=sentence_no, offset=wd["CharacterOffsetBegin"])
+            tokens[sentence_no, i] = token
+            article.tokens.append(token)
+            if wd.get('NamedEntityTag', 'O') != 'O': 
+                article.entities.append(dict(tokens=[tokenid], type=wd['NamedEntityTag']))
+        # Extract original tree 
+        tree = " ".join(itertools.takewhile(lambda x:x, itertools.imap(lambda l:l.strip(), lines)))
+        article.trees.append(dict(sentence=sentence_no, tree=tree))
+        # Parse dependencies
+        def parse_dependency(line):
+            rfunc, from_, to_ = _regroups("(\w+)\(.+-([0-9']+), .+-([0-9']+)\)", line)
+            if rfunc != 'root':
+                from_, to_ = [tokens[sentence_no, int(j)-1]['id'] for j in (from_, to_)]
+                article.dependencies.append(dict(child=from_, parent=to_, relation=rfunc))
+        [parse_dependency(line) for line in itertools.takewhile(lambda l:l.strip(), lines)]
+
+    # get coreferences
+    def get_coreference(lines):
+        for line in itertools.takewhile(lambda l: l != "Coreference set:", lines):
+            if line.strip():
+                groups = _regroups(r'\s*\((\S+)\) -> \((\S+)\), that is: \".*\" -> \".*\"', line)
+                yield [map(int, re.sub("[^\\d,]","", s).split(",")) for s in groups]
+    while True:
+        corefs = list(get_coreference(lines))
+        if not corefs:
+            break
+        for coref in corefs:
+            sets = []
+            for sent_index, head_index, from_index, to_index in coref:
+                # take all nodes from .. to, place head first (False<True)
+                indices = sorted(range(from_index, to_index), key=lambda i:(i!=head_index, i))
+                sets.append([tokens[sent_index, i-1]['id'] for i in indices])
+            article.coreferences.append(sets)
+
+
+
+        
+if __name__ == '__main__':
+    import json
+    logging.basicConfig(level=logging.DEBUG)
+    #lines = list(parse_text("Peter Jones lives in London. He likes it"))
+    #open("/tmp/lines.json", "w").write(json.dumps(lines))
+    lines = json.load(open("/tmp/lines.json"))
+    a = StanfordCoreNLP.stanford_to_saf(iter(lines))
+    print(json.dumps(a, indent=2))
+
+
+    
+
+###########################################################################
+#                          U N I T   T E S T S                            #
+###########################################################################
+
+
+import unittest
+
+class TestCoreNLP(unittest.TestCase):
+    
+    @classmethod
+    def test_lines(cls):
+        import amcat
+        fn = os.path.join(os.path.dirname(amcat.__file__), "tests", "testfile_corenlp.txt")
+        raw_result = open(fn).read()
+        return [line.strip() for line in raw_result.split("\n")]
+
+    def test_xml(self):
+        #TODO Test instead of print :-)
+        r = parse_results(self.test_lines())
+        xml = r.generate_xml()
+        from lxml import etree
+        print etree.tostring(xml, pretty_print=True)
+
+    def test_json(self):
+        import json
+        r = parse_results(self.test_lines())
+        j = r.to_json(indent=2)
+
+        d = json.loads(j)
+        tree_str = [u'(ROOT (S (NP (DT The) (NNS marines)) (VP (VBN attacked) '
+                    u'(ADVP (NP (DT the) (NN compound)) (RB again))) (. .)))',
+                    u'(ROOT (S (NP (PRP They)) (VP (VBP seem) (S (VP (TO to) (VP (VB like) (NP (PRP it)))))) (. .)))']
+        self.assertEqual(d["trees"], tree_str)
+
+        a = NAF_Article.from_json(j)
+        self.assertEqual(a.terms, r.terms)
+        self.assertEqual(a.words, r.words)
+        self.assertEqual(a.trees, r.trees)
+        self.assertEqual(a.entities, r.entities)
+        self.assertEqual(a.dependencies, r.dependencies)
+        self.assertEqual(a.coreferences, r.coreferences)
+        
+    def test_convert(self):
+        r = parse_results(self.test_lines())
+        conll = to_conll(r)
+        self.assertEqual(conll.split("\n")[0], '1\tThe\t_\tDT\tDT\t_\t2\tdet\t_\t_')
+        
+        
+        
