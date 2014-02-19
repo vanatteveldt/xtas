@@ -30,7 +30,7 @@ import itertools
 import datetime
 from cStringIO import StringIO
 
-from . import SAF
+from .saf import SAF
 
 log = logging.getLogger(__name__)
 import threading
@@ -227,11 +227,11 @@ def _parse_article(article, lines):
         article.trees.append(dict(sentence=sentence_no, tree=tree))
 
         def parse_dependency(line):
-            rfunc, from_, to_ = _regroups(RE_DEPENDENCY, line)
+            rfunc, parent, child = _regroups(RE_DEPENDENCY, line)
             if rfunc != 'root':
-                from_, to_ = [tokens[sentence_no, int(j)-1]['id']
-                              for j in (from_, to_)]
-                article.dependencies.append(dict(child=from_, parent=to_,
+                parent, child = [tokens[sentence_no, int(j)-1]['id']
+                                 for j in (parent, child)]
+                article.dependencies.append(dict(child=child, parent=parent,
                                                  relation=rfunc))
         map(parse_dependency, itertools.takewhile(strip, lines))
 
