@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import
 
+import re
 from datetime import datetime
 
 from elasticsearch import Elasticsearch, client, exceptions
@@ -34,7 +35,9 @@ def fetch(doc):
     """
     if isinstance(doc, dict) and set(doc.keys()) == set(_ES_DOC_FIELDS):
         idx, typ, id, field = [doc[k] for k in _ES_DOC_FIELDS]
-        return _es.get_source(index=idx, doc_type=typ, id=id)[field]
+        text = _es.get_source(index=idx, doc_type=typ, id=id)[field]
+        text = re.sub("\s+"," ", text)
+        return text
     else:
         # Assume simple string
         return doc

@@ -1,25 +1,12 @@
-###########################################################################
-#          (C) Vrije Universiteit, Amsterdam (the Netherlands)            #
-#                                                                         #
-# This file is part of AmCAT - The Amsterdam Content Analysis Toolkit     #
-#                                                                         #
-# AmCAT is free software: you can redistribute it and/or modify it under  #
-# the terms of the GNU Affero General Public License as published by the  #
-# Free Software Foundation, either version 3 of the License, or (at your  #
-# option) any later version.                                              #
-#                                                                         #
-# AmCAT is distributed in the hope that it will be useful, but WITHOUT    #
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or   #
-# FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public     #
-# License for more details.                                               #
-#                                                                         #
-# You should have received a copy of the GNU Affero General Public        #
-# License along with AmCAT.  If not, see <http://www.gnu.org/licenses/>.  #
-###########################################################################
-
-
 """
 Python interface for the Stanford CoreNLP suite and conversion to xtas/SAF
+
+CoreNLP requires CoreNLP to be installed, and an environment variable
+CORENLP_HOME pointing to the folder where it is installed.
+
+See http://nlp.stanford.edu/software/corenlp.shtml
+Download e.g.
+http://nlp.stanford.edu/software/stanford-corenlp-full-2014-01-04.zip
 """
 
 import os
@@ -28,6 +15,8 @@ import logging
 import pexpect
 import itertools
 import datetime
+import tempfile
+import subprocess
 from cStringIO import StringIO
 
 from .saf import SAF
@@ -182,6 +171,34 @@ class StanfordCoreNLP(object):
         _parse_article(article, lines)
         return article
 
+
+
+CONLL_CLASS = "edu.stanford.nlp.trees.EnglishGrammaticalStructure"
+
+def _get_tree(saf_article, sentence_id):
+    for tree in saf_article['trees']:
+        if int(tree['sentence']) == int(sentence_id):
+            return tree['tree']
+    raise ValueError("Sentence {sentence_id} not found in trees {trees}"
+                     .format(trees=saf_article['trees'], **locals()))
+
+def to_conll(tree):
+    """
+    Convert a parse tree from Penn (?) to conll
+    """
+
+    xml = ("<root><document><sentences><sentence>{tree}"
+           "</sentence></sentences></document></root>"
+           .format(**locals()))
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(xml)
+        f.flush()
+        cmd = StanfordCoreNLP.get_command(CONLL_CLASS,
+                                          ["-conllx", "-treeFile", f.name])
+        open("/tmp/tree.xml", "w").write(xml)
+        p = subprocess.check_output(cmd, shell=True)
+
+    return p
 
 def _regroups(pattern, text, **kargs):
     m = re.match(pattern, text, **kargs)

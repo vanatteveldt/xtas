@@ -98,14 +98,27 @@ def untokenize(tokens):
 
 @app.task
 def corenlp(doc):
+    # Output: saf article with trees
     # Requires CORENLP_HOME to point to the stanford corenlp folder
     from .corenlp import parse_text
     text = fetch(doc)
     return parse_text(text)
 
+@app.task
+def semafor(saf):
+    # Input: saf article with trees (ie corenlp output)
+    # Output: saf article with frames
+    # Requires CORENLP_HOME to point to the stanford corenlp folder
+    # Requires semafor web service to be listening to SEMAFOR_HOST:SEMAFOR:PORT
+    from .semafor import add_frames
+    add_frames(saf)
+    return saf
+
+
 
 @app.task
 def alpino(doc):
+    # Output: saf article
     # Requires ALPINO_HOME to point to the stanford corenlp folder
     from .alpino import parse_text
     text = fetch(doc)

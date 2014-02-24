@@ -1,3 +1,13 @@
+"""
+Python interface for Alpino parser and conversion to xtas/SAF
+
+This module requires Alpino to be installed, and an environment variable
+ALPINO_HOME pointing to the folder where it is installed
+
+See http://www.let.rug.nl/vannoord/alp/Alpino/
+Download from http://www.let.rug.nl/vannoord/alp/Alpino/binary/versions/
+"""
+
 import subprocess
 import logging
 import os
