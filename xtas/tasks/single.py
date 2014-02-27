@@ -123,3 +123,15 @@ def alpino(doc):
     from .alpino import parse_text
     text = fetch(doc)
     return parse_text(text)
+
+
+@app.task
+def sources_nl(saf):
+    # Input: saf article with dependencies (alpino output)
+    # Output: saf article with dependencies and sources
+    # Requires syntaxrules to be on the PYTHONATH
+    # Requires a sparql server running on http://localhost:3030/x
+    # See https://github.com/vanatteveldt/syntaxrules/
+    from syntaxrules.sources import get_all_sources_nl
+    saf['sources'] = list(get_all_sources_nl(saf))
+    return saf
