@@ -41,7 +41,7 @@ def parse_text(text):
 
 class StanfordCoreNLP(object):
 
-    corenlp_version = os.environ.get("CORENLP_VERSION", "3.2.0")
+    corenlp_version = os.environ.get("CORENLP_VERSION", "3.3.1")
 
     def __init__(self, timeout=600, **classpath_args):
         """
