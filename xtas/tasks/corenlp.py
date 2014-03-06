@@ -17,6 +17,8 @@ import itertools
 import datetime
 import tempfile
 import subprocess
+from unidecode import unidecode
+
 from cStringIO import StringIO
 
 from .saf import SAF
@@ -111,7 +113,7 @@ class StanfordCoreNLP(object):
             except pexpect.TIMEOUT:
                 break
 
-        text = text.replace("\n", " ")
+        text = re.sub("\s+", " ", unidecode(text))
         self._corenlp_process.sendline(text)
 
         return self._get_results()
