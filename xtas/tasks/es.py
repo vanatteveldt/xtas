@@ -36,9 +36,10 @@ def fetch(doc):
     if isinstance(doc, dict) and set(doc.keys()) == set(_ES_DOC_FIELDS):
         idx, typ, id, field = [doc[k] for k in _ES_DOC_FIELDS]
         text = _es.get_source(index=idx, doc_type=typ, id=id)[field]
-        text = "\n".join(re.sub("\s+"," ", para)
+        if not (text and text.strip()):
+            return ""
+        return "\n".join(re.sub("\s+"," ", para)
                          for para in text.split("\n\n"))
-        return text
     else:
         # Assume simple string
         return doc

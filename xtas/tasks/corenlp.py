@@ -58,7 +58,7 @@ class StanfordCoreNLP(object):
         """
 
         self.timeout = timeout
-        cmd = self.get_command(classname=CLASSNAME, memory="800M",
+        cmd = self.get_command(classname=CLASSNAME, memory="3G",
                                **classpath_args)
 
         log.info("Starting the Stanford Core NLP parser.")
@@ -78,7 +78,7 @@ class StanfordCoreNLP(object):
                 log.warn(self._corenlp_process.read())
                 raise Exception("Exception from CoreNLP")
         log.debug(" ..  Finished loading modules...")
-        self._corenlp_process.expect("Entering interactive shell.")
+        self._corenlp_process.expect("Entering interactive shell.", timeout=600)
         log.info("NLP tools loaded.")
 
     def _get_results(self):
@@ -153,7 +153,7 @@ class StanfordCoreNLP(object):
         return ":".join(jars)
 
     @classmethod
-    def stanford_to_saf(cls, lines):
+    def stanford_to_saf(cls, id, lines):
         """
         Convert stanfords 'interactive' text format to saf
         Unfortunately, stanford cannot return xml in interactive mode, so we
