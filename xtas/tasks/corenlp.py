@@ -31,12 +31,12 @@ PARSER_LOCK = threading.Lock()
 CLASSNAME = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
 
 
-def parse_text(text):
+def parse_text(text, **options):
     """Use a global/persistent corenlp object to parse the given text"""
     global PARSER
     with PARSER_LOCK:
         if PARSER is None:
-            PARSER = StanfordCoreNLP()
+            PARSER = StanfordCoreNLP(**options)
         parse = PARSER.parse(text)
     return StanfordCoreNLP.stanford_to_saf(parse)
 
@@ -45,7 +45,7 @@ class StanfordCoreNLP(object):
 
     corenlp_version = os.environ.get("CORENLP_VERSION", "3.3.1")
 
-    def __init__(self, timeout=600, **classpath_args):
+    def __init__(self, timeout=600, annotators=None, **classpath_args):
         """
         Start the CoreNLP server as a java process. Arguments are used to
         locate the correct jar files.
@@ -59,7 +59,7 @@ class StanfordCoreNLP(object):
 
         self.timeout = timeout
         cmd = self.get_command(classname=CLASSNAME, memory="3G",
-                               **classpath_args)
+                               annotators=annotators, **classpath_args)
 
         log.info("Starting the Stanford Core NLP parser.")
         log.debug("Command: {cmd}".format(**locals()))
@@ -67,17 +67,6 @@ class StanfordCoreNLP(object):
         self._wait_for_corenlp_init()
 
     def _wait_for_corenlp_init(self):
-        """
-        Give some progress feedback while waiting for server to initialize
-        """
-        for module in ["Pos tagger", "NER-all", "NER-muc", "ConLL", "PCFG"]:
-            log.debug("Loading {module}".format(**locals()))
-            i = self._corenlp_process.expect(["done.", "Exception"],
-                                             timeout=600)
-            if i == 1:
-                log.warn(self._corenlp_process.read())
-                raise Exception("Exception from CoreNLP")
-        log.debug(" ..  Finished loading modules...")
         self._corenlp_process.expect("Entering interactive shell.", timeout=600)
         log.info("NLP tools loaded.")
 
@@ -113,17 +102,24 @@ class StanfordCoreNLP(object):
             except pexpect.TIMEOUT:
                 break
 
+        if not isinstance(text, unicode):
+            text = text.decode("ascii")
         text = re.sub("\s+", " ", unidecode(text))
         self._corenlp_process.sendline(text)
 
         return self._get_results()
 
     @classmethod
-    def get_command(cls, classname, argstr="", memory=None, **classpath_args):
+    def get_command(cls, classname, argstr="", memory=None, annotators=None,
+                    **classpath_args):
         classpath = cls.get_classpath(**classpath_args)
         memory = "" if memory is None else "-Xmx{memory}".format(**locals())
         if isinstance(argstr, list):
             argstr = " ".join(map(str, argstr))
+        if annotators:
+            if isinstance(annotators, list):
+                annotators = ",".join(annotators)
+            argstr += " -annotators {annotators} ".format(**locals())
         return ("java {memory} -cp {classpath} {classname} {argstr}"
                 .format(**locals()))
 
@@ -153,7 +149,7 @@ class StanfordCoreNLP(object):
         return ":".join(jars)
 
     @classmethod
-    def stanford_to_saf(cls, id, lines):
+    def stanford_to_saf(cls, lines):
         """
         Convert stanfords 'interactive' text format to saf
         Unfortunately, stanford cannot return xml in interactive mode, so we
@@ -235,11 +231,21 @@ def _parse_article(article, lines):
             token = dict(id=tokenid, word=wd['Text'], lemma=wd['Lemma'],
                          pos=wd['PartOfSpeech'], sentence=sentence_no,
                          offset=wd["CharacterOffsetBegin"])
+            token['pos1'] = POSMAP[token['pos']]
             tokens[sentence_no, i] = token
             article.tokens.append(token)
             if wd.get('NamedEntityTag', 'O') != 'O':
                 article.entities.append(dict(tokens=[tokenid],
                                              type=wd['NamedEntityTag']))
+        # try to peek ahead to see if we have more than tokens
+        lines, copy = itertools.tee(lines)
+        try:
+            peek = copy.next()
+            if peek.startswith("Sentence #"):
+                continue
+        except StopIteration:
+            break
+
         # Extract original tree
         tree = " ".join(itertools.takewhile(lambda x: x,
                                             itertools.imap(strip, lines)))
@@ -277,12 +283,40 @@ def _parse_article(article, lines):
 
 RE_DEPENDENCY = "(\w+)\(.+-([0-9']+), .+-([0-9']+)\)"
 RE_COREF = r'\s*\((\S+)\) -> \((\S+)\), that is: \".*\" -> \".*\"'
-
-if __name__ == '__main__':
-    import json
-    logging.basicConfig(level=logging.DEBUG)
-    #lines = list(parse_text("Peter Jones lives in London. He likes it"))
-    #open("/tmp/lines.json", "w").write(json.dumps(lines))
-    lines = json.load(open("/tmp/lines.json"))
-    a = StanfordCoreNLP.stanford_to_saf(iter(lines))
-    print(json.dumps(a, indent=2))
+POSMAP = {'CC': 'C',
+          'CD': 'Q',
+          'DT': 'D',
+          'EX': '?',
+          'FW': 'N',
+          'IN': 'P',
+          'JJ': 'A',
+          'JJR': 'A',
+          'JJS': 'A',
+          'LS': 'C',
+          'MD': 'V',
+          'NN': 'N',
+          'NNS': 'N',
+          'NNP': 'M',
+          'NNPS': 'M',
+          'PDT': 'D',
+          'POS': 'O',
+          'PRP': 'O',
+          'PRP$': 'O',
+          'RB': 'B',
+          'RBR': 'B',
+          'RBS': 'B',
+          'RP': 'R',
+          'SYM': '.',
+          'TO': '?',
+          'UH': '!',
+          'VB': 'V',
+          'VBD': 'V',
+          'VBG': 'V',
+          'VBN': 'V',
+          'VBP': 'V',
+          'VBZ': 'V',
+          'WDT': 'D',
+          'WP': 'O',
+          'WP$': 'O',
+          'WRB': 'B',
+          }

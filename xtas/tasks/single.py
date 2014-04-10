@@ -6,6 +6,7 @@ import json
 import os
 from urllib import urlencode
 from urllib2 import urlopen
+import socket
 
 import nltk
 
@@ -105,6 +106,14 @@ def corenlp(doc):
     return parse_text(text)
 
 @app.task
+def corenlp_lemmatize(doc):
+    # Output: saf article with tokens only
+    # Requires CORENLP_HOME to point to the stanford corenlp folder
+    from .corenlp import parse_text
+    text = fetch(doc)
+    return parse_text(text, annotators=["tokenize", "ssplit", "pos", "lemma"])
+
+@app.task
 def semafor(saf):
     # Input: saf article with trees (ie corenlp output)
     # Output: saf article with frames
@@ -135,3 +144,13 @@ def sources_nl(saf):
     from syntaxrules.sources import get_all_sources_nl
     saf['sources'] = list(get_all_sources_nl(saf))
     return saf
+
+@app.task
+def tadpole(doc):
+    """
+    Run a document through the frog server at localhost:9887
+    @return: saf article with tokens+lemmata
+    """
+    from .tadpole import tadpole
+    text = fetch(doc)
+    return list(tadpole(text))
