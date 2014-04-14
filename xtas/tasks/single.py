@@ -151,6 +151,6 @@ def tadpole(doc):
     Run a document through the frog server at localhost:9887
     @return: saf article with tokens+lemmata
     """
-    from .tadpole import tadpole
+    from .tadpole import tadpole_saf
     text = fetch(doc)
-    return list(tadpole(text))
+    return tadpole_saf(text)

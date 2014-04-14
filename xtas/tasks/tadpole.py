@@ -1,6 +1,8 @@
+from unidecode import unidecode
 import socket
 from StringIO import StringIO
 from itertools import takewhile
+import datetime
 
 _POSMAP = {"VZ" : "P",
            "N" : "N",
@@ -19,6 +21,9 @@ _POSMAP = {"VZ" : "P",
 }
 
 def _call_tadpole(text, host="localhost", port=9887):
+    if not isinstance(text, unicode): text = unicode(text)
+    text = unidecode(text).encode("utf-8")
+    
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect( (host, port ))
     s.sendall(text)
@@ -40,3 +45,14 @@ def tadpole(text):
             pos1 = _POSMAP[pos.split("(")[0]]
             yield dict(id=i, sentence=sid, word=token, lemma=lemma,
                        pos=pos, pos1=pos1, pos_confidence=float(conf))
+
+def tadpole_saf(text):
+    tokens = list(tadpole(text))
+    return {"header" : {'format': "SAF",
+                      'format-version': "0.0",
+                      'processed': [{'module': "tadpole",
+                                     "started": datetime.datetime.now().isoformat()}
+                                    ]
+                    },
+            "tokens" : tokens}
+    
