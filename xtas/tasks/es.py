@@ -84,7 +84,26 @@ def store_single(data, taskname, idx, typ, id):
     _es.index(index=idx, doc_type=child_type, id=id, body=doc, parent=id)
     return data
 
+def get_multiple_results(docs, taskname):
+    """
+    Get all xtas results for the given documents and task name
+    """
+    for idx, typ in set((d['index'], d['type']) for d in docs):
+        doctype = "__".join([typ, taskname])
+        _check_parent_mapping(idx, typ, doctype)
+    docdict = {(doc['index'], doc['type'], unicode(doc['id'])) : doc for doc in docs}
+    getdocs = [{"_index" : doc['index'], "_id" : doc['id'], "_parent" : doc['id'],
+                "_type" : "__".join([doc['type'], taskname]), "_source" : ["data"]}
+               for doc in docs]
 
+    results = _es.mget({"docs": getdocs})['docs']
+    for d in results:
+        typ = d['_type'].split("__")[0]
+        doc = docdict[d['_index'], typ, d['_id']]
+        result = d['_source']['data'] if d['found'] else None
+        yield doc, result
+
+    
 def get_all_results(idx, typ, id):
     """
     Get all xtas results for the document

@@ -4,74 +4,91 @@ Pipelining with partial caching
 
 import celery
 
-from xtas.tasks.es import _ES_DOC_FIELDS, get_all_results, store_single, fetch
+from xtas.tasks.es import _ES_DOC_FIELDS, get_all_results, store_single, fetch, get_multiple_results
 from xtas.celery import app
 
-
-def pipeline(doc, pipeline, store_final=True, store_intermediate=False,
-             block=True):
+def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     """
-    Get the result for a given document.
     Pipeline should be a list of dicts, with members task and argument
     e.g. [{"module" : "tokenize"},
           {"module" : "pos_tag", "arguments" : {"model" : "nltk"}}]
-    @param block: if True, it will block and return the actual result.
-                  If False, it will return an AsyncResult unless the result was
-                  cached, in which case it returns the result immediately (!)
     @param store_final: if True, store the final result
     @param store_intermediate: if True, store all intermediate results as well
     """
-    # form basic pipeline by resolving task dictionaries to task objects
-    tasks = [_get_task(t) for t in pipeline]
+    
+    def normalize_pipe(pipe):
+        for task_dict in pipe:
+            module = task_dict['module']
+            if isinstance(module, (str, unicode)):
+                module = app.tasks[module]
+            yield dict(module=module, arguments=task_dict.get('arguments', {}))
 
-    if isinstance(doc, dict) and set(doc.keys()) == set(_ES_DOC_FIELDS):
-        idx, typ, id, field = [doc[k] for k in _ES_DOC_FIELDS]
-        chain = []
-        input = None
-        cache = get_all_results(idx, typ, id)
-        # Check cache for existing documents
-        # Iterate over tasks in reverse order, check cached result, and
-        # otherwise prepend task (and cache store command) to chain
-        for i in range(len(tasks), 0, -1):
-            taskname = "__".join(t.task for t in tasks[:i])
-            if taskname in cache:
-                input = cache[taskname]
-                break
-            if (i == len(tasks) and store_final) or store_intermediate:
-                chain.insert(0, store_single.s(taskname, idx, typ, id))
-            chain.insert(0, tasks[i-1])
-        if not chain:  # final result was cached, good!
-            return input
-        elif input is None:
-            input = fetch(doc)
-    else:
-        # the doc is a string, so we can't use caching
-        chain = tasks
-        input = doc
+    def get_chained_task(input, tasks, all_tasks, doc=None):
+        """
+        Get a celery task with the input and the chained tasks
+        @param tasks: a list of dictionaries with 'module' and 'arguments']
+        """
+        head, tail = tasks[0], tasks[1:]
+        # Apply result (cached value) to start of chain, add rest if needed
+        head = head['module'].s(input, **head['arguments'])
+        tail = [x['module'].s(**x['arguments']) for x in tail]
+        chain = [head] + tail
+        # Store final result
+        if doc and store_final:
+            taskname = "__".join(t['module'].name for t in all_tasks)
+            chain.append(store_single.s(taskname, doc['index'], doc['type'], doc['id']))
+        if doc and store_intermediate:
+            for i in range(len(tasks)-1, 0, -1):
+                taskname = "__".join(t['module'].name for t in all_tasks[:i])
+                chain.insert(i, store_single.s(taskname, doc['index'], doc['type'], doc['id']))
+        return celery.chain(*chain)
 
-    chain = celery.chain(*chain).delay(input)
-    if block:
-        return chain.get()
-    else:
-        return chain
+    tasks = list(normalize_pipe(pipe))
+    
+    todo = []
+    cached = []
 
+    str_docs = [doc for doc in docs if isinstance(doc, (str, unicode))]
+    docs = [doc for doc in docs if not isinstance(doc, (str, unicode))]
+    
+    for i in range(len(tasks), 0, -1):
+        if not docs:
+            break
+        unseen = []
+        taskname = "__".join(t['module'].name for t in tasks[:i])
+        for doc, result in get_multiple_results(docs, taskname):
+            if result:
+                chain = tasks[i:]
+                if chain: # need to run one or more modules
+                    todo.append(get_chained_task(result, chain, tasks, doc))
+                else: # result is fully cached
+                    cached.append(result)
+            else:
+                unseen.append(doc)
+        docs = unseen
+            
+    for doc in docs:
+        # not done at all
+        input=fetch(doc)
+        todo.append(get_chained_task(input, tasks, tasks, doc))
+    for doc in str_docs:
+        todo.append(get_chained_task(doc, tasks, tasks))
+    
+    # block on group get.
+    # WARNING:This is not a good idea if the pipeline itself is made a task
+    # Ideally I would just place 'results' and tasks together in a group, but is that possible?
+    calc = celery.group(todo).apply_async().get() if todo else []
 
-def _get_task(task_dict):
-    "Create a celery task object from a dictionary with module and arguments"
-    if isinstance(task_dict, dict):
-        task = task_dict['module']
-        args = task_dict.get('arguments')
-    else:
-        task = task_dict
-        args = None
-    if isinstance(task, (str, unicode)):
-        task = app.tasks[task]
-    if isinstance(args, dict):
-        return task.s(**args)
-    elif args:
-        return task.s(*args)
-    else:
-        return task.s()
+    return cached + calc
+        
+def pipeline(doc, pipeline, store_final=True, store_intermediate=False):
+    """
+    Get the result for a given document.
+    """
+    results = pipeline_multiple([doc], pipeline, store_final=store_final,
+                                store_intermediate=store_intermediate)
+    return results[0]
+
 
 
 if __name__ == '__main__':
