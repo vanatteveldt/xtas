@@ -228,8 +228,10 @@ def _parse_article(article, lines):
         for i, s in enumerate(re.findall('\[([^\]]+)\]', lines.next())):
             wd = dict(re.findall(r"([^=\s]*)=([^=\s]*)", s))
             tokenid = len(tokens) + 1
-            token = dict(id=tokenid, word=wd['Text'], lemma=wd['Lemma'],
-                         pos=wd['PartOfSpeech'], sentence=sentence_no,
+            if not "CharacterOffsetBegin" in wd: 
+                continue
+            token = dict(id=tokenid, word=wd['Text'], lemma=wd.get('Lemma', '?'),
+                         pos=wd.get('PartOfSpeech', '?'), sentence=sentence_no,
                          offset=wd["CharacterOffsetBegin"])
             token['pos1'] = POSMAP[token['pos']]
             tokens[sentence_no, i] = token
