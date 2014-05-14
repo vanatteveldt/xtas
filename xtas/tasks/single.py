@@ -141,8 +141,23 @@ def sources_nl(saf):
     # Requires syntaxrules to be on the PYTHONATH
     # Requires a sparql server running on http://localhost:3030/x
     # See https://github.com/vanatteveldt/syntaxrules/
-    from syntaxrules.sources import get_all_sources_nl
-    saf['sources'] = list(get_all_sources_nl(saf))
+    from syntaxrules.sources import get_sources_nl
+    sources = [{role: [int(n.id) for n in nodes] for (role, nodes) in source.iteritems()}
+               for source in get_sources_nl(saf)]
+    saf['sources'] = sources
+    return saf
+
+@app.task
+def sources_en(saf):
+    # Input: saf article with dependencies (alpino output)
+    # Output: saf article with dependencies and sources
+    # Requires syntaxrules to be on the PYTHONATH
+    # Requires a sparql server running on http://localhost:3030/x
+    # See https://github.com/vanatteveldt/syntaxrules/
+    from syntaxrules.sources import get_sources_en
+    sources = [{role: [int(n.id) for n in nodes] for (role, nodes) in source.iteritems()}
+               for source in get_sources_en(saf)]
+    saf['sources'] = sources
     return saf
 
 @app.task
