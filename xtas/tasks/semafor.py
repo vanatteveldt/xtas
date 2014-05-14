@@ -39,7 +39,7 @@ def nc(host, port, input):
     s.connect( (host, port ))
     s.sendall(input)
     s.shutdown(socket.SHUT_WR)
-    s.settimeout(5)
+    s.settimeout(30)
     result = StringIO()
     while 1:
         data = s.recv(1024)
@@ -79,6 +79,12 @@ def add_frames(saf_article):
             err = {"module": module, "sentence": sid, "error": unicode(e)}
             saf_article.setdefault('errors', []).append(err)
             continue
+        if "error" in sent:
+            err = {"module": module, "sentence": sid}
+            err.update(sent)
+            saf_article.setdefault('errors', []).append(err)
+            continue
+
 
         frames, sem_tokens = sent["frames"], sent["tokens"]
         assert len(tokens) == len(sem_tokens)

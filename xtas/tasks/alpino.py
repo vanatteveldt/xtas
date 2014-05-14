@@ -11,6 +11,7 @@ Download from http://www.let.rug.nl/vannoord/alp/Alpino/binary/versions/
 import subprocess
 import logging
 import os
+import unidecode
 
 from xtas.tasks.saf import SAF
 
@@ -29,9 +30,12 @@ def parse_text(text):
 
 
 def tokenize(text, alpino_home):
-    if isinstance(text, unicode):
-        text = text.encode("utf-8")
-
+    if not isinstance(text, unicode):
+        text = text.decode("ascii")
+    
+    text = unidecode.unidecode(text)    
+    text = text.encode("utf-8")
+    
     p = subprocess.Popen(CMD_TOKENIZE, shell=False, stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, cwd=alpino_home)
     tokens, err = p.communicate(text)
