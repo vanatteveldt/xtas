@@ -281,7 +281,7 @@ def _parse_article(article, lines):
                 sets.append([tokens[sent_index, i-1]['id'] for i in indices])
             article.coreferences.append(sets)
 
-RE_DEPENDENCY = "(\w+)\(.+-([0-9']+), .+-([0-9']+)\)"
+RE_DEPENDENCY = r"([\w+]+)\(.+-([0-9']+), .+-([0-9']+)\)"
 RE_COREF = r'\s*\((\S+)\) -> \((\S+)\), that is: \".*\" -> \".*\"'
 POSMAP = {'CC': 'C',
           'CD': 'Q',
