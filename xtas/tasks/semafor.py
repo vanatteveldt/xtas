@@ -1,60 +1,79 @@
 """
 Semafor semantic parser
 
-This module requires the semafor web service running at
-SEMAFOR_HOST:SEMAFOR_PORT (defaults to localhost:9888).
+This module assumes SEMAFOR_HOME to point to the location
+where semafor is cloned/installed, and MALT_MODEL_DIR to
+the location where the Malt models are downloaded.
 
 If called with a penn treebank (?) style parse tree, also
 requires CORENLP_HOME to convert it to conll style.
 
-See: https://github.com/sammthomson/semafor
+This module runs semafor in 'interactive' mode, which is added
+on the interactive_mode branch of vanatteveldt/semafor.
 
-- Clone/download semafor
-- Build with mvn package
-- Download semafor malt model
-- Run the web server:
-java -Xms4g -Xmx4g -cp target/Semafor-3.0-alpha-04.jar \
-    edu.cmu.cs.lti.ark.fn.SemaforSocketServer \
-    model-dir:/home/wva/semafor_malt_model_20121129 port:9888
+git clone -b interactive_mode https://github.com/vanatteveldt/semafor
+
+See: https://github.com/sammthomson/semafor
 """
 
 from __future__ import absolute_import
 
 import datetime
-import socket
 import json
 import os
-from cStringIO import StringIO
 
 from xtas.tasks.corenlp import to_conll
 
-def get_settings():
-    host = os.environ.get("SEMAFOR_HOST", "localhost")
-    port = int(os.environ.get("SEMAFOR_PORT", 9888))
-    return host, port
 
-def nc(host, port, input):
-    """'netcat' implementation, see http://stackoverflow.com/a/1909355"""
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect( (host, port ))
-    s.sendall(input)
-    s.shutdown(socket.SHUT_WR)
-    s.settimeout(30)
-    result = StringIO()
-    while 1:
-        data = s.recv(1024)
-        if data == "":
-            s.close()
-            return result.getvalue()
-        result.write(data)
+import threading
+import subprocess
+import tempfile
 
+
+class Semafor(object):
+    def __init__(self):
+        self.start_semafor()
+
+    def start_semafor(self):
+        semafor_home = os.environ["SEMAFOR_HOME"]
+        model_dir = os.environ.get("MALT_MODEL_DIR", semafor_home)
+        cp = os.path.join(semafor_home, "target", "Semafor-3.0-alpha-04.jar")
+        cmd = ["java","-Xms4g","-Xmx4g","-cp",cp,
+               "edu.cmu.cs.lti.ark.fn.SemaforInteractive",
+               "model-dir:{model_dir}".format(**locals())]
+        print(" ".join(cmd))
+        self.process = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE)
+        list(self.wait_for_prompt())
+
+    def wait_for_prompt(self):
+        while True:
+            line = self.process.stdout.readline()
+            print "<<<", `line`
+            if line == '':
+                raise Exception("Unexpected EOF")
+            if line.strip() == ">>>":
+                break
+            yield line
+
+    def call_semafor(self, conll_str):
+        self.process.stdin.write(conll_str.strip())
+        self.process.stdin.write("\n\n")
+        self.process.stdin.flush()
+        lines = list(self.wait_for_prompt())
+        assert len(lines) == 1
+        return json.loads(lines[0])
+
+
+_SINGLETON_LOCK = threading.Lock()
 def call_semafor(conll_str):
     """
-    Use semafor to parse the conll_str. Assumes that semafor is running as a web service on
-    localhost:9888, and assumes conll_str to be a string representation of parse trees in conll format
+    Call semafor on the given conll_str using a thread-safe singleton instance
     """
-    result = nc("localhost", 9888, conll_str)
-    return [json.loads(sent) for sent in result.split("\n") if sent.strip()]
+    with _SINGLETON_LOCK:
+        if not hasattr(Semafor, '_singleton'):
+            Semafor._singleton = Semafor()
+        return Semafor._singleton.call_semafor(conll_str)
 
 
 def add_frames(saf_article):
@@ -73,10 +92,10 @@ def add_frames(saf_article):
         tokens = sorted((w for w in saf_article['tokens']
                          if w['sentence'] == sid),
                         key=lambda token: int(token['offset']))
-        try:
-            sent, = call_semafor(conll)
-        except socket.timeout, e:
-            err = {"module": module, "sentence": sid, "error": unicode(e)}
+        sent = call_semafor(conll)
+        if "error" in sent:
+            err = {"module": module, "sentence": sid}
+            err.update(sent)
             saf_article.setdefault('errors', []).append(err)
             continue
         if "error" in sent:
