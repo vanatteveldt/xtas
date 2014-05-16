@@ -120,6 +120,8 @@ def semafor(saf):
     # Requires CORENLP_HOME to point to the stanford corenlp folder
     # Requires semafor web service to be listening to SEMAFOR_HOST:SEMAFOR:PORT
     from .semafor import add_frames
+    if isinstance(saf, (str, unicode)):
+        saf = json.loads(saf)
     add_frames(saf)
     return saf
 
