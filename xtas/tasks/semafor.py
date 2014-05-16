@@ -41,7 +41,6 @@ class Semafor(object):
         cmd = ["java","-Xms4g","-Xmx4g","-cp",cp,
                "edu.cmu.cs.lti.ark.fn.SemaforInteractive",
                "model-dir:{model_dir}".format(**locals())]
-        print(" ".join(cmd))
         self.process = subprocess.Popen(cmd, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE)
         list(self.wait_for_prompt())
@@ -49,7 +48,6 @@ class Semafor(object):
     def wait_for_prompt(self):
         while True:
             line = self.process.stdout.readline()
-            print "<<<", `line`
             if line == '':
                 raise Exception("Unexpected EOF")
             if line.strip() == ">>>":
