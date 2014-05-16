@@ -8,9 +8,8 @@ from datetime import datetime
 from elasticsearch import Elasticsearch, client, exceptions
 
 from ..celery import app
-
-_es = Elasticsearch()
-
+from xtas import esconfig
+_es = Elasticsearch([{"host": esconfig.ES_HOST, "port": esconfig.ES_PORT}])
 
 _ES_DOC_FIELDS = ('index', 'type', 'id', 'field')
 
