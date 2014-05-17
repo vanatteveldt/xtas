@@ -199,7 +199,7 @@ def to_conll(trees):
         open("/tmp/tree.xml", "w").write(xml)
         p = subprocess.check_output(cmd, shell=True)
 
-    return p.split("\n\n")
+    return [c for c in p.split("\n\n") if c.strip()]
 
 def _regroups(pattern, text, **kargs):
     m = re.match(pattern, text, **kargs)
