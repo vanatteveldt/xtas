@@ -83,10 +83,11 @@ def add_frames(saf_article):
                   "started": datetime.datetime.now().isoformat()}
 
     saf_article['header']['processed'].append(provenance)
-    for t in saf_article['trees']:
-        sid = int(t['sentence'])
-        tree = t['tree']
-        conll = to_conll(tree)
+    trees = [t['tree'] for t in saf_article['trees']]
+    sids = [int(t['sentence']) for t in saf_article['trees']]
+    conlls = to_conll(trees)
+    assert len(sids) == len(conlls)
+    for sid, conll in zip(sids, conlls)
         tokens = sorted((w for w in saf_article['tokens']
                          if w['sentence'] == sid),
                         key=lambda token: int(token['offset']))

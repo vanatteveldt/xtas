@@ -180,23 +180,26 @@ def _get_tree(saf_article, sentence_id):
     raise ValueError("Sentence {sentence_id} not found in trees {trees}"
                      .format(trees=saf_article['trees'], **locals()))
 
-def to_conll(tree):
+def to_conll(trees):
     """
     Convert a parse tree from Penn (?) to conll
     """
 
-    xml = ("<root><document><sentences><sentence>{tree}"
-           "</sentence></sentences></document></root>"
-           .format(**locals()))
+    trees = ["<sentence>{t}</sentence>".format(t=t.encode("utf-8"))
+             for t in trees]
+    xml = ("<root><document><sentences>\n{trees}"
+           "\n</sentences></document></root>"
+           .format(trees="\n".join(trees)))
     with tempfile.NamedTemporaryFile() as f:
         f.write(xml)
         f.flush()
         cmd = StanfordCoreNLP.get_command(CONLL_CLASS,
-                                          ["-conllx", "-treeFile", f.name])
+                                          ["-conllx", "-treeFile", f.name],
+                                          memory="512M")
         open("/tmp/tree.xml", "w").write(xml)
         p = subprocess.check_output(cmd, shell=True)
 
-    return p
+    return p.split("\n\n")
 
 def _regroups(pattern, text, **kargs):
     m = re.match(pattern, text, **kargs)
@@ -228,7 +231,7 @@ def _parse_article(article, lines):
         for i, s in enumerate(re.findall('\[([^\]]+)\]', lines.next())):
             wd = dict(re.findall(r"([^=\s]*)=([^=\s]*)", s))
             tokenid = len(tokens) + 1
-            if not "CharacterOffsetBegin" in wd: 
+            if not "CharacterOffsetBegin" in wd:
                 continue
             token = dict(id=tokenid, word=wd['Text'], lemma=wd.get('Lemma', '?'),
                          pos=wd.get('PartOfSpeech', '?'), sentence=sentence_no,
