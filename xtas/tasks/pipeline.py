@@ -15,7 +15,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     @param store_final: if True, store the final result
     @param store_intermediate: if True, store all intermediate results as well
     """
-    
+
     def normalize_pipe(pipe):
         for task_dict in pipe:
             module = task_dict['module']
@@ -38,19 +38,21 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
             taskname = "__".join(t['module'].name for t in all_tasks)
             chain.append(store_single.s(taskname, doc['index'], doc['type'], doc['id']))
         if doc and store_intermediate:
+            offset = len(all_tasks) - len(tasks)  # i.e. number of tasks that are already cached
             for i in range(len(tasks)-1, 0, -1):
-                taskname = "__".join(t['module'].name for t in all_tasks[:i])
+                taskname = "__".join(t['module'].name for t in all_tasks[:(i+offset)])
+
                 chain.insert(i, store_single.s(taskname, doc['index'], doc['type'], doc['id']))
         return celery.chain(*chain)
 
     tasks = list(normalize_pipe(pipe))
-    
+
     todo = []
     cached = []
 
     str_docs = [doc for doc in docs if isinstance(doc, (str, unicode))]
     docs = [doc for doc in docs if not isinstance(doc, (str, unicode))]
-    
+
     for i in range(len(tasks), 0, -1):
         if not docs:
             break
@@ -66,21 +68,21 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
             else:
                 unseen.append(doc)
         docs = unseen
-            
+
     for doc in docs:
         # not done at all
         input=fetch(doc)
         todo.append(get_chained_task(input, tasks, tasks, doc))
     for doc in str_docs:
         todo.append(get_chained_task(doc, tasks, tasks))
-    
+
     # block on group get.
     # WARNING:This is not a good idea if the pipeline itself is made a task
     # Ideally I would just place 'results' and tasks together in a group, but is that possible?
     calc = celery.group(todo).apply_async().get() if todo else []
 
     return cached + calc
-        
+
 def pipeline(doc, pipeline, store_final=True, store_intermediate=False):
     """
     Get the result for a given document.
@@ -121,6 +123,8 @@ if __name__ == '__main__':
     parser.add_argument("--index", "-n", help="Elasticsearch index name")
     parser.add_argument("--doctype", "-d", help="Elasticsearch document type")
     parser.add_argument("--field", "-F", help="Elasticsearch field type")
+    parser.add_argument("--store-intermediate", help="Store intermediate results",
+                        action='store_true')
     parser.add_argument("--input-file", "-f", help="Input document name. "
                         "If not given, use ID/index/doctype/field. "
                         "If neither are given, read document text from stdin")
@@ -150,5 +154,5 @@ if __name__ == '__main__':
     if args.always_eager:
         app.conf['CELERY_ALWAYS_EAGER'] = True
 
-    result = pipeline(doc, pipe)
+    result = pipeline(doc, pipe, store_intermediate=args.store_intermediate)
     json.dump(result, outfile, indent=2)
