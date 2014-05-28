@@ -171,3 +171,7 @@ def tadpole(doc):
     from .tadpole import tadpole_saf
     text = fetch(doc)
     return tadpole_saf(text)
+
+@app.task
+def psalm_dummy(doc):
+    raise NotImplementedError()
