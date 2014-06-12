@@ -17,6 +17,8 @@ import itertools
 import datetime
 import tempfile
 import subprocess
+import json
+
 from unidecode import unidecode
 
 from cStringIO import StringIO
@@ -26,7 +28,7 @@ from .saf import SAF
 log = logging.getLogger(__name__)
 import threading
 
-PARSER = None
+PARSERS = {}
 PARSER_LOCK = threading.Lock()
 CLASSNAME = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
 
@@ -34,10 +36,11 @@ CLASSNAME = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
 def parse_text(text, **options):
     """Use a global/persistent corenlp object to parse the given text"""
     global PARSER
+    key = json.dumps(options)
     with PARSER_LOCK:
-        if PARSER is None:
-            PARSER = StanfordCoreNLP(**options)
-        parse = PARSER.parse(text)
+        if key not in PARSERS:
+            PARSERS[key] = StanfordCoreNLP(**options)
+        parse = PARSERS[key].parse(text)
     return StanfordCoreNLP.stanford_to_saf(parse)
 
 
