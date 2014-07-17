@@ -80,12 +80,7 @@ def test_parse():
 
 def test_task():
     _check_corenlp()
-    raw = corenlp_lemmatize("It works", output='raw')
-    assert_in("<lemma>work</lemma>", raw)  # list of header / sentence / tokens
-    saf = corenlp_lemmatize("It works", output='saf')
+    saf = corenlp_lemmatize("It works")
     assert_equal(len(saf['tokens']), 2)
-
-    raw = corenlp("It works", output='raw')
-    assert_in('<dep type="nsubj">', raw)
-    saf = corenlp("It works", output='saf')
+    saf = corenlp("It works")
     assert_equal(len(saf['dependencies']), 1)

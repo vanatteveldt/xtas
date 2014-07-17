@@ -101,17 +101,17 @@ def untokenize(tokens):
 def corenlp(doc):
     # Output: saf article with trees
     # Requires CORENLP_HOME to point to the stanford corenlp folder
-    from .corenlp import parse_text
+    from .corenlp import parse, stanford_to_saf
     text = fetch(doc)
-    return parse_text(text)
+    return stanford_to_saf(parse(text))
 
 @app.task
 def corenlp_lemmatize(doc):
     # Output: saf article with tokens only
     # Requires CORENLP_HOME to point to the stanford corenlp folder
-    from .corenlp import parse_text
+    from .corenlp import parse, stanford_to_saf
     text = fetch(doc)
-    return parse_text(text, annotators=["tokenize", "ssplit", "pos", "lemma"])
+    return stanford_to_saf(parse(text, annotators=["tokenize", "ssplit", "pos", "lemma"]))
 
 @app.task
 def semafor(saf):

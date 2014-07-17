@@ -116,7 +116,8 @@ class StanfordCoreNLP(object):
         while True:
             time.sleep(.1)
             result = self.out.getvalue()
-            if result or not wait_for_output:
+            if ((result and result.strip().endswith("</root>"))
+                or not wait_for_output):
                 return result
 
     def parse(self, text):
