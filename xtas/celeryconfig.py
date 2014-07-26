@@ -1,7 +1,10 @@
 # Default configuration for Celery; can be overridden with an
 # xtas_celeryconfig module in the PYTHONPATH.
 
-BROKER_URL = 'amqp://127.0.0.1:5673//'
+import os
+BROKER_HOST=os.environ.get('XTAS_BROKER_HOST', '127.0.0.1')
+
+BROKER_URL = 'amqp://{host}:{port}//'.format(host=BROKER_HOST, port=5672)
 CELERY_RESULT_BACKEND = 'amqp'
 
 CELERY_TASK_SERIALIZER = 'json'
