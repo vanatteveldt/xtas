@@ -156,10 +156,8 @@ def sources_en(saf):
     # Requires syntaxrules to be on the PYTHONATH
     # Requires a sparql server running on http://localhost:3030/x
     # See https://github.com/vanatteveldt/syntaxrules/
-    from syntaxrules.sources import get_sources_en
-    sources = [{role: [int(n.id) for n in nodes] for (role, nodes) in source.iteritems()}
-               for source in get_sources_en(saf)]
-    saf['sources'] = sources
+    from _sources_en import add_quotes
+    add_quotes(saf)
     return saf
 
 @app.task
