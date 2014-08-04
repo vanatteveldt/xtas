@@ -54,6 +54,7 @@ class SAF(object):
         stops when a node in exclude is reached
         @param exlude: a set of nodes to exclude
         """
+        if isinstance(node, int): node = self.get_token(node)
         if exclude is None: exclude = set()
         if node['id'] in exclude: return
         exclude.add(node['id'])
@@ -144,9 +145,27 @@ def get_quote_dicts(saf, quotes):
 def add_quotes(saf_dict):
     saf = SAF(saf_dict)
     def expand(node, exclude):
-        print "EXPANDING", node
         return [n['id'] for n in saf.get_descendants(node, exclude={exclude['id']})]
     saf_dict['sources'] = [{"source": expand(src, quote),
                            "quote": expand(quote, src)}
                           for (src, quote) in get_quotes(saf)]
     return saf_dict
+
+def get_clauses(saf):
+    if 'sources' in saf.saf:
+        # skip existing sources
+        sources = set()
+        for quote in saf.saf['sources']:
+            sources |= set(quote['source'])
+    for rel in saf.saf['dependencies']:
+        if rel['child'] in sources: continue
+        if rel['relation'] in ('nsubj', 'agent'):
+            yield ([n['id'] for n in saf.get_descendants(rel['child'])],
+                   [n['id'] for n in saf.get_descendants(rel['parent'], exclude={rel['child']})])
+
+def add_clauses(saf_dict):
+    saf = SAF(saf_dict)
+    saf_dict['clauses'] = [{"subject": s, "predicate": p}
+                           for (s,p) in get_clauses(saf)]
+    return saf_dict
+    

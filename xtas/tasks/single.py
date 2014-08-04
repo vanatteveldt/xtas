@@ -151,15 +151,20 @@ def sources_nl(saf):
 
 @app.task
 def sources_en(saf):
-    # Input: saf article with dependencies (alpino output)
+    # Input: saf article with dependencies (corenlp output)
     # Output: saf article with dependencies and sources
-    # Requires syntaxrules to be on the PYTHONATH
-    # Requires a sparql server running on http://localhost:3030/x
-    # See https://github.com/vanatteveldt/syntaxrules/
     from ._sources_en import add_quotes
     add_quotes(saf)
     return saf
 
+@app.task
+def clauses_en(saf):
+    # Input: saf article with dependencies (corenlp output) and optional sources
+    # Output: saf article with clauses added
+    from ._sources_en import add_clauses
+    add_clauses(saf)
+    return saf
+    
 @app.task
 def tadpole(doc):
     """
