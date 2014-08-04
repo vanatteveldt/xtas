@@ -48,6 +48,19 @@ class SAF(object):
                     changed = True
         return generations
 
+    def get_descendants(self, node, exclude=None):
+        """
+        Yield all descendants (including the node itself),
+        stops when a node in exclude is reached
+        @param exlude: a set of nodes to exclude
+        """
+        if exclude is None: exclude = set()
+        if node['id'] in exclude: return
+        exclude.add(node['id'])
+        yield node
+        for _rel, child in self.get_children(node):
+            for descendant in self.get_descendants(child, exclude):
+                yield descendant
 
 
 def first(seq):
@@ -124,9 +137,16 @@ def get_quotes(saf):
             if quote:
                 yield quote
 
+def get_quote_dicts(saf, quotes):
+    for src, quote in quotes:
+        yield
 
 def add_quotes(saf_dict):
     saf = SAF(saf_dict)
-    saf_dict['quotes'] = [{"source": src['id'], "quote": quote['id']}
+    def expand(node, exclude):
+        print "EXPANDING", node
+        return [n['id'] for n in saf.get_descendants(node, exclude={exclude['id']})]
+    saf_dict['quotes'] = [{"source": expand(src, quote),
+                           "quote": expand(quote, src)}
                           for (src, quote) in get_quotes(saf)]
     return saf_dict
