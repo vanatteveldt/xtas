@@ -146,7 +146,7 @@ def add_quotes(saf_dict):
     def expand(node, exclude):
         print "EXPANDING", node
         return [n['id'] for n in saf.get_descendants(node, exclude={exclude['id']})]
-    saf_dict['quotes'] = [{"source": expand(src, quote),
+    saf_dict['sources'] = [{"source": expand(src, quote),
                            "quote": expand(quote, src)}
                           for (src, quote) in get_quotes(saf)]
     return saf_dict

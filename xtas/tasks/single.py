@@ -156,7 +156,7 @@ def sources_en(saf):
     # Requires syntaxrules to be on the PYTHONATH
     # Requires a sparql server running on http://localhost:3030/x
     # See https://github.com/vanatteveldt/syntaxrules/
-    from _sources_en import add_quotes
+    from ._sources_en import add_quotes
     add_quotes(saf)
     return saf
 
