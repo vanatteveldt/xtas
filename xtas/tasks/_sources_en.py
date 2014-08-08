@@ -1,4 +1,5 @@
 from saf import SAF
+import collections
 
 SAY_VERBS = {"tell", "show", " acknowledge", "admit", "affirm", "allege", "announce", "assert", "attest", "avow", "claim", "comment", "concede", "confirm", "declare", "deny", "exclaim", "insist", "mention", "note", "proclaim", "remark", "report", "say", "speak", "state", "suggest", "talk", "tell", "write", "add"}
 QUOTE_MARKS = {'``', "''", '`', "'", '"'}
@@ -152,20 +153,39 @@ def add_quotes(saf_dict):
     return saf_dict
 
 def get_clauses(saf):
+    sources = set()
     if 'sources' in saf.saf:
         # skip existing sources
-        sources = set()
         for quote in saf.saf['sources']:
             sources |= set(quote['source'])
     for rel in saf.saf['dependencies']:
         if rel['child'] in sources: continue
         if rel['relation'] in ('nsubj', 'agent'):
-            yield ([n['id'] for n in saf.get_descendants(rel['child'])],
-                   [n['id'] for n in saf.get_descendants(rel['parent'], exclude={rel['child']})])
+            yield rel['child'], rel['parent']
+#            yield ([n['id'] for n in saf.get_descendants(rel['child'])],
+#                   [n['id'] for n in saf.get_descendants(rel['parent'], exclude={rel['child']})])
+
+def prune_clauses(saf, clauses):
+    def is_contained(node, others):
+        for other in others:
+            if node == other: continue
+            if node in {n['id'] for n in saf.get_descendants(other)}:
+                return True
+
+    # if two clauses have the same subject, and the predicate of B is a subset of A, drop B
+    clauses_per_subject = collections.defaultdict(list)
+    for s, p in clauses:
+        clauses_per_subject[s].append(p)
+    for s, ps in clauses_per_subject.iteritems():
+        for p in ps:
+            i = is_contained(p, ps)
+            if not is_contained(p, ps):
+                yield s, p
 
 def add_clauses(saf_dict):
     saf = SAF(saf_dict)
-    saf_dict['clauses'] = [{"subject": s, "predicate": p}
-                           for (s,p) in get_clauses(saf)]
+    def expand(node, exclude):
+        return [n['id'] for n in saf.get_descendants(saf.get_token(node), exclude={exclude})]
+    saf_dict['clauses'] = [{"subject": expand(s, p), "predicate": expand(p, s)}
+                           for (s,p) in prune_clauses(saf, get_clauses(saf))]
     return saf_dict
-    
