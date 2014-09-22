@@ -102,7 +102,7 @@ def get_multiple_results(docs, taskname):
         result = d['_source']['data'] if d['found'] else None
         yield doc, result
 
-    
+
 def get_all_results(idx, typ, id):
     """
     Get all xtas results for the document
@@ -130,3 +130,17 @@ def get_single_result(taskname, idx, typ, id):
     except exceptions.TransportError, e:
         if e.status_code != 404:
             raise
+
+
+from hashlib import sha224 as hash_class
+def adhoc_document(idx, typ, fld, text):
+    """
+    Retrieve the adhoc document with that text, or create a new one
+    @returns: the id of the (existing or created) document
+    """
+    hash = hash_class(text).hexdigest()
+    try:
+        _es.get(index=idx, doc_type=typ, id=hash, _source=False)
+    except exceptions.NotFoundError:
+        _es.index(index=idx, doc_type=typ, id=hash, body={fld: text})
+    return es_document(idx, typ, hash, fld)

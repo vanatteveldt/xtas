@@ -4,7 +4,7 @@ Pipelining with partial caching
 
 import celery
 
-from xtas.tasks.es import _ES_DOC_FIELDS, get_all_results, store_single, fetch, get_multiple_results
+from xtas.tasks.es import _ES_DOC_FIELDS, get_all_results, store_single, fetch, get_multiple_results, adhoc_document
 from xtas.celery import app
 
 def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
@@ -121,9 +121,11 @@ if __name__ == '__main__':
                         action="store_true")
     parser.add_argument("--id", "-i", help="ID of the document to process")
     parser.add_argument("--index", "-n", help="Elasticsearch index name")
-    parser.add_argument("--doctype", "-d", help="Elasticsearch document type")
-    parser.add_argument("--field", "-F", help="Elasticsearch field type")
+    parser.add_argument("--doctype", "-d", help="Elasticsearch document type", default="article")
+    parser.add_argument("--field", "-F", help="Elasticsearch field type", default="text")
     parser.add_argument("--store-intermediate", help="Store intermediate results",
+                        action='store_true')
+    parser.add_argument("--cache-adhoc", help="Cache ad-hoc (text) queries",
                         action='store_true')
     parser.add_argument("--input-file", "-f", help="Input document name. "
                         "If not given, use ID/index/doctype/field. "
@@ -136,9 +138,12 @@ if __name__ == '__main__':
     if args.input_file is not None:
         doc = open(args.input_file).read()
     elif args.id is not None:
-        doc = es_document(args.index, args.doctype, args.id, args.field)
+        doc = es_document(args.index or "amcat", args.doctype, args.id, args.field)
     else:
         doc = sys.stdin.read()
+
+    if args.id is None and args.cache_adhoc:
+        doc = adhoc_document(args.index or "adhoc", args.doctype, args.field, doc)
 
     # pipeline
     if '[' in args.module[0] or '{' in args.module[0]:
