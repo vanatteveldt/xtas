@@ -130,7 +130,7 @@ class StanfordCoreNLP(object):
 
 def parse(text, annotators=None, **options):
     s = StanfordCoreNLP.get_singleton(annotators, **options)
-    return s.parse(text, **options)
+    return s.parse(text)
 
 
 def get_corenlp_version():

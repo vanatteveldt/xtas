@@ -111,7 +111,8 @@ def corenlp_lemmatize(doc):
     # Requires CORENLP_HOME to point to the stanford corenlp folder
     from .corenlp import parse, stanford_to_saf
     text = fetch(doc)
-    return stanford_to_saf(parse(text, annotators=["tokenize", "ssplit", "pos", "lemma"]))
+    result = parse(text, annotators=["tokenize", "ssplit", "pos", "lemma"], memory="512M")
+    return stanford_to_saf(result)
 
 @app.task
 def semafor(saf):
@@ -164,7 +165,7 @@ def clauses_en(saf):
     from ._sources_en import add_clauses
     add_clauses(saf)
     return saf
-    
+
 @app.task
 def tadpole(doc):
     """
