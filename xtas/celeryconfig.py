@@ -14,13 +14,15 @@ BROKER_URL = 'amqp://{user}:{passwd}@{host}:{port}//'.format(
 CELERY_RESULT_BACKEND = 'amqp'
 
 CELERY_QNAME = os.environ.get('XTAS_CELERY_QUEUE', 'amcat')
-CELERY_QUEUES = (
-    Queue(CELERY_QNAME, Exchange('default'), routing_key=CELERY_QNAME),
-)
 CELERY_DEFAULT_QUEUE = CELERY_QNAME
 CELERY_DEFAULT_EXCHANGE_TYPE = 'direct'
-CELERY_DEFAULT_ROUTING_KEY = CELERY_QNAME
 
+
+CELERY_ROUTES = {
+        'xtas.tasks.single.corenlp': {
+            'queue': 'corenlp',
+        },
+}
 
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
