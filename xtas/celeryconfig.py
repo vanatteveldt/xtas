@@ -5,18 +5,21 @@ import os
 from kombu import Exchange, Queue
 
 
-BROKER_HOST=os.environ.get('XTAS_BROKER_HOST', '127.0.0.1')
-BROKER_USERNAME=os.environ.get('XTAS_BROKER_USERNAME', 'guest')
-BROKER_PASSWORD=os.environ.get('XTAS_BROKER_PASSWORD', 'guest')
+_BROKER_HOST=os.environ.get('XTAS_BROKER_HOST', '127.0.0.1')
+_BROKER_USERNAME=os.environ.get('XTAS_BROKER_USERNAME', 'guest')
+_BROKER_PASSWORD=os.environ.get('XTAS_BROKER_PASSWORD', 'guest')
 
 BROKER_URL = 'amqp://{user}:{passwd}@{host}:{port}//'.format(
-    user=BROKER_USERNAME, passwd=BROKER_PASSWORD, host=BROKER_HOST, port=5672)
+    user=_BROKER_USERNAME, passwd=_BROKER_PASSWORD, host=_BROKER_HOST, port=5672)
 CELERY_RESULT_BACKEND = 'amqp'
 
-CELERY_QNAME = os.environ.get('XTAS_CELERY_QUEUE', 'amcat')
+CELERY_QNAME = os.environ.get('XTAS_CELERY_QUEUE', 'xtas')
 CELERY_DEFAULT_QUEUE = CELERY_QNAME
 CELERY_DEFAULT_EXCHANGE_TYPE = 'direct'
 
+CELERY_QUEUES = (
+    Queue(CELERY_QNAME, Exchange('default'), routing_key=CELERY_QNAME),
+)
 
 CELERY_ROUTES = {
         'xtas.tasks.single.corenlp': {
