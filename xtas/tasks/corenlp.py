@@ -129,6 +129,8 @@ class StanfordCoreNLP(object):
 
 
 def parse(text, annotators=None, **options):
+    if not text.strip():
+        return None
     s = StanfordCoreNLP.get_singleton(annotators, **options)
     return s.parse(text)
 
@@ -157,18 +159,30 @@ def get_command(annotators=None, memory=None):
         cmd += ' -annotators {}'.format(",".join(annotators))
     return cmd
 
-
+def get_header():
+     return {'format': "SAF",
+             'format-version': "0.0",
+             'processed':  {'module': "corenlp",
+                            'module-version': _CORENLP_VERSION,
+                            "started": datetime.datetime.now().isoformat()}
+             }
 
 def stanford_to_saf(xml_bytes):
-    doc = Document(xml_bytes)
-    saf = collections.defaultdict(list)
 
-    saf['header'] = {'format': "SAF",
-                     'format-version': "0.0",
-                     'processed':  {'module': "corenlp",
-                                    'module-version': _CORENLP_VERSION,
-                                    "started": datetime.datetime.now().isoformat()}
-                 }
+    saf = collections.defaultdict(list)
+    saf['header'] = get_header()
+    saf['tokens'] = []
+
+    if not xml_bytes:
+        return saf
+
+    try:
+        doc = Document(xml_bytes)
+    except:
+        log.exception("Error on parsing xml")
+        raise
+
+
     tokens = {} # (xml_sentid, xml_tokenid) : saf_tokenid
     def tokenid(sentid, tokenid):
         if (sentid, tokenid) in tokens:
