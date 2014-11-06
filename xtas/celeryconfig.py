@@ -36,4 +36,5 @@ CELERY_ENABLE_UTC = True
 CELERY_TASK_RESULT_EXPIRES = 3600
 
 # Uncomment the following to make Celery tasks run locally (for debugging).
-#CELERY_ALWAYS_EAGER = True
+CELERY_ALWAYS_EAGER = os.environ.get('XTAS_EAGER', 'N').upper().startswith('Y')
+
