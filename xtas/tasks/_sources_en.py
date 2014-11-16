@@ -147,6 +147,9 @@ def get_multi_quotes(saf, sentence):
 
 def get_quotes(saf):
     for s in saf.get_sentences():
+        deps = [d for d in self.saf['dependencies']
+                if self.get_token(d['child'])['sentence'] == s]
+        if not deps: continue # no dependencies -> no quotes
         found = False
         for quote in get_regular_quotes(saf, s):
             found = True
