@@ -102,10 +102,12 @@ def start_quote(saf, sentence):
     return t and (t[0]['lemma'] in QUOTE_MARKS)
 
 def end_quote(saf, sentence):
-    return saf.get_tokens(sentence)[-1]['lemma'] in QUOTE_MARKS
+    t = saf.get_tokens(sentence)
+    return t and (t[-1]['lemma'] in QUOTE_MARKS)
 
 def middle_quote(saf, sentence):
-    return any(t['lemma'] in QUOTE_MARKS for t in saf.get_tokens(sentence)[1:-1])
+    t = saf.get_tokens(sentence)
+    return t and any(t['lemma'] in QUOTE_MARKS for t in saf.get_tokens(sentence)[1:-1])
 
 
 def get_top_subject(saf, sentence):
