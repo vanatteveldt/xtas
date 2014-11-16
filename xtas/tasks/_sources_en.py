@@ -44,6 +44,8 @@ class SAF(object):
         # return a dict with the dept of each node
         rels = [d for d in self.saf['dependencies']
             if self.get_token(d['child'])['sentence'] == sentence]
+        if not rels:
+            return {}
         generations = {self.get_root(sentence)['id'] : 0}
         changed = True
         while changed:
@@ -87,7 +89,7 @@ def get_regular_quote(saf, token):
             relparent = saf.get_parent(token)
             if relparent:
                 if relparent[0] == 'advcl':
-                    return (src, parent[1])
+                    return (src, relparent[1])
 
     if 'prepc_according_to' in c and 'pobj' in c:
         return (c['pobj'], token)
@@ -116,7 +118,9 @@ def get_top_subject(saf, sentence):
                 if rel['relation'] in ('nsubj', 'nsubjpass'))
     if subjects:
         depths = saf.get_node_depths(sentence)
-        return saf.get_token(first(sorted(subjects, key=lambda su: depths.get(su, 99999999))))
+        if depths:
+            return saf.get_token(first(sorted(subjects, key=lambda su: depths.get(su, 99999999))))
+
 
 
 def get_multi_quotes(saf, sentence):
