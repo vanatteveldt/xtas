@@ -17,6 +17,11 @@ class SAF(object):
         return ((rel['relation'], self.get_token(rel['child']))
                 for rel in self.saf['dependencies'] if rel['parent'] == token)
 
+    def get_parent(self, token):
+        if not isinstance(token, int): token = token['id']
+        for rel in self.saf['dependencies']:
+            if rel['child'] == token:
+                return rel['relation'], self.get_token(rel['parent'])
 
     def get_tokens(self, sentence):
         return sorted((t for t in self.saf['tokens'] if t['sentence'] == sentence),
@@ -75,9 +80,14 @@ def get_regular_quote(saf, token):
     c = dict(saf.get_children(token))
     if token['lemma'] in SAY_VERBS:
         src = get_first_value(c, ["nsubj", "agent"])
-        quote = get_first_value(c, ["ccomp", "dep", "parataxis"])
+        quote = get_first_value(c, ["ccomp", "dep", "parataxis", "dobj"])
         if src and quote:
             return (src, quote)
+        elif src:
+            rel, parent = saf.get_parent(token)
+            if rel == 'advcl':
+                return (src, parent)
+
     if 'prepc_according_to' in c and 'pobj' in c:
         return (c['pobj'], token)
 
