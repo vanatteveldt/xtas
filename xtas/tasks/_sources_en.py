@@ -84,9 +84,10 @@ def get_regular_quote(saf, token):
         if src and quote:
             return (src, quote)
         elif src:
-            rel, parent = saf.get_parent(token)
-            if rel == 'advcl':
-                return (src, parent)
+            relparent = saf.get_parent(token)
+            if relparent:
+                if relparent[0] == 'advcl':
+                    return (src, parent[1])
 
     if 'prepc_according_to' in c and 'pobj' in c:
         return (c['pobj'], token)
