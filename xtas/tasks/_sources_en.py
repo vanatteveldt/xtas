@@ -1,5 +1,6 @@
 from saf import SAF
 import collections
+import logging
 
 SAY_VERBS = {"tell", "show", " acknowledge", "admit", "affirm", "allege", "announce", "assert", "attest", "avow", "claim", "comment", "concede", "confirm", "declare", "deny", "exclaim", "insist", "mention", "note", "proclaim", "remark", "report", "say", "speak", "state", "suggest", "talk", "tell", "write", "add"}
 QUOTE_MARKS = {'``', "''", '`', "'", '"'}
@@ -34,7 +35,7 @@ class SAF(object):
         # root is a parent that has no parents
         roots = set(parents.values()) - set(parents.keys())
         if len(roots) != 1:
-            raise ValueError("Sentence {sentence} has roots {roots}".format(**locals()))
+            raise ValueError("Sentence {sentence} has roots {roots}, parents {parents}".format(**locals()))
         return self.get_token(list(roots)[0])
 
     def get_sentences(self):
@@ -150,6 +151,12 @@ def get_quotes(saf):
         deps = [d for d in saf.saf['dependencies']
                 if saf.get_token(d['child'])['sentence'] == s]
         if not deps: continue # no dependencies -> no quotes
+        try:
+            saf.get_root(s)
+        except:
+            logging.exception("Error on getting root, skipping sentence")
+            continue
+
         found = False
         for quote in get_regular_quotes(saf, s):
             found = True
