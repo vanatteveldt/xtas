@@ -148,23 +148,20 @@ def get_multi_quotes(saf, sentence):
 
 def get_quotes(saf):
     for s in saf.get_sentences():
-        deps = [d for d in saf.saf['dependencies']
-                if saf.get_token(d['child'])['sentence'] == s]
-        if not deps: continue # no dependencies -> no quotes
         try:
-            saf.get_root(s)
+
+            found = False
+            for quote in get_regular_quotes(saf, s):
+                found = True
+                yield quote
+            if not found:
+                quote = get_multi_quotes(saf, s)
+                if quote:
+                    yield quote
         except:
             logging.exception("Error on getting root, skipping sentence")
-            continue
 
-        found = False
-        for quote in get_regular_quotes(saf, s):
-            found = True
-            yield quote
-        if not found:
-            quote = get_multi_quotes(saf, s)
-            if quote:
-                yield quote
+
 
 def get_quote_dicts(saf, quotes):
     for src, quote in quotes:
