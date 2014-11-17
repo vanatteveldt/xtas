@@ -177,6 +177,7 @@ def add_quotes(saf_dict):
     return saf_dict
 
 def get_clauses(saf):
+    if 'dependencies' not in saf.saf: return
     sources = set()
     if 'sources' in saf.saf:
         # skip existing sources
