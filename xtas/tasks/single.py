@@ -96,7 +96,13 @@ def semanticize(doc):
 def untokenize(tokens):
     return ' '.join(tokens)
 
+@app.task
+def parzu(doc):
+    from .parzu import parse, conll_to_saf
+    text = fetch(doc)
+    return conll_to_saf(parse(text))
 
+    
 @app.task
 def corenlp(doc):
     # Output: saf article with trees
