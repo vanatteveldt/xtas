@@ -87,18 +87,23 @@ def get_multiple_results(docs, taskname):
     """
     Get all xtas results for the given documents and task name
     """
-    for idx, typ in set((d['index'], d['type']) for d in docs):
+    idx = {d['index'] for d in docs}
+    if len(idx) > 1:
+        raise ValueError("All documents need to be in the same index")
+    idx = idx.pop()
+        
+    for typ in {d['type'] for d in docs}:
         doctype = "__".join([typ, taskname])
         _check_parent_mapping(idx, typ, doctype)
-    docdict = {(doc['index'], doc['type'], unicode(doc['id'])) : doc for doc in docs}
-    getdocs = [{"_index" : doc['index'], "_id" : doc['id'], "_parent" : doc['id'],
+    docdict = {(doc['type'], unicode(doc['id'])) : doc for doc in docs}
+    getdocs = [{"_index" : idx, "_id" : doc['id'], "_parent" : doc['id'],
                 "_type" : "__".join([doc['type'], taskname]), "_source" : ["data"]}
                for doc in docs]
 
     results = _es.mget({"docs": getdocs})['docs']
     for d in results:
         typ = d['_type'].split("__")[0]
-        doc = docdict[d['_index'], typ, d['_id']]
+        doc = docdict[typ, d['_id']]
         result = d['_source']['data'] if d['found'] else None
         yield doc, result
 
