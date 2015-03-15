@@ -143,7 +143,7 @@ def adhoc_document(idx, typ, fld, text):
     Retrieve the adhoc document with that text, or create a new one
     @returns: the id of the (existing or created) document
     """
-    hash = hash_class(text).hexdigest()
+    hash = hash_class(text.encode("utf-8")).hexdigest()
     try:
         _es.get(index=idx, doc_type=typ, id=hash, _source=False)
     except exceptions.NotFoundError:
