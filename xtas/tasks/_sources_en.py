@@ -5,6 +5,9 @@ import logging
 SAY_VERBS = {"tell", "show", " acknowledge", "admit", "affirm", "allege", "announce", "assert", "attest", "avow", "claim", "comment", "concede", "confirm", "declare", "deny", "exclaim", "insist", "mention", "note", "proclaim", "remark", "report", "say", "speak", "state", "suggest", "talk", "tell", "write", "add"}
 QUOTE_MARKS = {'``', "''", '`', "'", '"'}
 
+ACTION_NOUNS= {"attack","bombardment","bombing","ambush","strike","raid","invasion","mission","offensive","occupation","assault","aggression","war","kill","massacre","slaughter","assassination","destruction","operation"}
+ACTOR_ENTITIES = {"PERSON", "MISC", "ORGANIZATION"}
+
 class SAF(object):
     def __init__(self, saf):
         self.saf = saf
@@ -28,6 +31,14 @@ class SAF(object):
         return sorted((t for t in self.saf['tokens'] if t['sentence'] == sentence),
                       key = lambda t: int(t['offset']))
 
+    def get_entity(self, token):
+        if not isinstance(token, int): token = token['id']
+        if 'entities' in self.saf:
+            for entity in self.saf['entities']:
+                if token in entity['tokens']:
+                    return entity['type']
+        
+        
 
     def get_root(self, sentence):
         parents = {d['child'] : d['parent'] for d in self.saf['dependencies']
@@ -65,6 +76,7 @@ class SAF(object):
         """
         if isinstance(node, int): node = self.get_token(node)
         if exclude is None: exclude = set()
+        exclude = {n if isinstance(n, int) else n['id'] for n in exclude}
         if node['id'] in exclude: return
         exclude.add(node['id'])
         yield node
@@ -72,7 +84,9 @@ class SAF(object):
             for descendant in self.get_descendants(child, exclude):
                 yield descendant
 
-
+    def is_descendant(self, node, possible_ancestor):
+        return any(node == descendant['id'] for descendant in self.get_descendants(possible_ancestor))
+                
 def first(seq):
     return next(iter(seq), None)
 
@@ -83,7 +97,7 @@ def get_regular_quote(saf, token):
     c = dict(saf.get_children(token))
     if token['lemma'] in SAY_VERBS:
         src = get_first_value(c, ["nsubj", "agent"])
-        quote = get_first_value(c, ["ccomp", "dep", "parataxis", "dobj"])
+        quote = get_first_value(c, ["ccomp", "dep", "parataxis", "dobj", "nsubjpass"])
         if src and quote:
             return (src, quote)
         elif src:
@@ -183,13 +197,58 @@ def get_clauses(saf):
         # skip existing sources
         for quote in saf.saf['sources']:
             sources |= set(quote['source'])
-    for rel in saf.saf['dependencies']:
-        if rel['child'] in sources: continue
-        if rel['relation'] in ('nsubj', 'agent'):
-            yield rel['child'], rel['parent']
-#            yield ([n['id'] for n in saf.get_descendants(rel['child'])],
-#                   [n['id'] for n in saf.get_descendants(rel['parent'], exclude={rel['child']})])
 
+    surels = [rel for rel in saf.saf['dependencies']
+              if  rel['relation'] in ('nsubj', 'agent') and rel['child'] not in sources]
+    predicates = {rel['parent'] for rel in surels}
+    for pred in predicates:
+        children = {rel['child'] for rel in surels if rel['parent'] == pred}
+        # eliminate children who are descendant of other children
+        for child in children:
+            others = {c for c in children if c != child}
+            if not any(saf.is_descendant(child, c) for c in others):
+                yield child, pred
+
+    #add dangling passives
+    for rel in saf.saf['dependencies']:
+        if (rel['relation'] == 'nsubjpass'
+            and rel['child'] not in sources
+            and rel['parent'] not in predicates
+            and saf.get_token(rel['parent'])['lemma'] not in SAY_VERBS):
+            
+            yield None, rel['parent']
+                
+
+def add_nominal_clauses(saf, clauses):
+    actions = {node['id'] for node in saf.saf['tokens']
+               if node['pos1'] == 'N' and node['lemma'] in ACTION_NOUNS}
+    
+    def _get_nominal_subject(action):
+        children = {rel: child for (rel, child) in saf.get_children(action)}
+        if 'poss' in children:
+            return children['poss']['id']
+        if 'amod' in children and saf.get_entity(children['amod']) in ACTOR_ENTITIES:
+            return children['amod']['id']
+
+    def _get_subject(subj):
+        if subj in actions:
+            nomsubj = _get_nominal_subject(subj)
+            if nomsubj:
+                return nomsubj
+        return subj
+            
+    for subj, pred in clauses:
+        yield _get_subject(subj), pred
+        actions -= {subj}
+
+    for action in actions:
+        subj = _get_nominal_subject(action)
+        if subj:
+            yield subj, action
+            
+            
+        
+                
 def prune_clauses(saf, clauses):
     def is_contained(node, others):
         for other in others:
@@ -209,8 +268,15 @@ def prune_clauses(saf, clauses):
 
 def add_clauses(saf_dict):
     saf = SAF(saf_dict)
-    def expand(node, exclude):
-        return [n['id'] for n in saf.get_descendants(saf.get_token(node), exclude={exclude})]
-    saf_dict['clauses'] = [{"subject": expand(s, p), "predicate": expand(p, s)}
-                           for (s,p) in prune_clauses(saf, get_clauses(saf))]
+    def make_clause(subj, pred):
+        # i.e. in case of tie, node goes to subject, so expand subject first and use all to exclude
+        
+        subj = [n['id'] for n in saf.get_descendants(subj, exclude={pred})] if subj else []
+        pred = [n['id'] for n in saf.get_descendants(pred, exclude=subj)]
+        return {"subject": subj, "predicate": pred}
+    clauses = get_clauses(saf)
+    clauses = add_nominal_clauses(saf, clauses)
+    clauses = prune_clauses(saf, clauses)
+    saf_dict['clauses'] = [make_clause(s, p) for (s,p) in clauses]
+
     return saf_dict
