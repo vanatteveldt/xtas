@@ -12,14 +12,19 @@ class SAF(object):
     def __init__(self, saf):
         self.saf = saf
         self._tokens = {t['id']: t for t in saf['tokens']}
+        self._children = None # cache token : [(rel, child), ...]
+
 
     def get_token(self, token_id):
         return self._tokens[token_id]
 
     def get_children(self, token):
         if not isinstance(token, int): token = token['id']
-        return ((rel['relation'], self.get_token(rel['child']))
-                for rel in self.saf['dependencies'] if rel['parent'] == token)
+        if self._children is None:
+            self._children = collections.defaultdict(list)
+            for rel in self.saf['dependencies']:
+                self._children[rel['parent']].append((rel['relation'], self.get_token(rel['child'])))
+        return self._children[token]
 
     def get_parent(self, token):
         if not isinstance(token, int): token = token['id']
@@ -37,8 +42,8 @@ class SAF(object):
             for entity in self.saf['entities']:
                 if token in entity['tokens']:
                     return entity['type']
-        
-        
+
+
 
     def get_root(self, sentence):
         parents = {d['child'] : d['parent'] for d in self.saf['dependencies']
@@ -86,7 +91,7 @@ class SAF(object):
 
     def is_descendant(self, node, possible_ancestor):
         return any(node == descendant['id'] for descendant in self.get_descendants(possible_ancestor))
-                
+
 def first(seq):
     return next(iter(seq), None)
 
@@ -215,14 +220,14 @@ def get_clauses(saf):
             and rel['child'] not in sources
             and rel['parent'] not in predicates
             and saf.get_token(rel['parent'])['lemma'] not in SAY_VERBS):
-            
+
             yield None, rel['parent']
-                
+
 
 def add_nominal_clauses(saf, clauses):
     actions = {node['id'] for node in saf.saf['tokens']
                if node['pos1'] == 'N' and node['lemma'] in ACTION_NOUNS}
-    
+
     def _get_nominal_subject(action):
         children = {rel: child for (rel, child) in saf.get_children(action)}
         if 'poss' in children:
@@ -236,7 +241,7 @@ def add_nominal_clauses(saf, clauses):
             if nomsubj:
                 return nomsubj
         return subj
-            
+
     for subj, pred in clauses:
         yield _get_subject(subj), pred
         actions -= {subj}
@@ -245,10 +250,10 @@ def add_nominal_clauses(saf, clauses):
         subj = _get_nominal_subject(action)
         if subj:
             yield subj, action
-            
-            
-        
-                
+
+
+
+
 def prune_clauses(saf, clauses):
     def is_contained(node, others):
         for other in others:
@@ -270,7 +275,7 @@ def add_clauses(saf_dict):
     saf = SAF(saf_dict)
     def make_clause(subj, pred):
         # i.e. in case of tie, node goes to subject, so expand subject first and use all to exclude
-        
+
         subj = [n['id'] for n in saf.get_descendants(subj, exclude={pred})] if subj else []
         pred = [n['id'] for n in saf.get_descendants(pred, exclude=subj)]
         return {"subject": subj, "predicate": pred}
