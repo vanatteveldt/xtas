@@ -46,7 +46,6 @@ def frog(text):
             pos1 = _POSMAP[pos.split("(")[0]]
             tokens.append(dict(id=i, sentence=sid, word=token, lemma=lemma,
                                pos=pos, pos1=pos1, pos_confidence=float(conf)))
-            print ">>", ner
             if ner.startswith("B-"):
                 type = ner.split("_")[0].split("-")[-1]
                 entities.append({'tokens': [], 'type': type})
