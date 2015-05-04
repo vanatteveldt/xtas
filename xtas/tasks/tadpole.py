@@ -34,20 +34,28 @@ def _call_tadpole(text, host="localhost", port=9887):
 def tadpole(text):
     if not text.endswith("\n"): text = text + "\n"
     sid = 0
+    tokens, entities = [], []
     for i, l in enumerate(_call_tadpole(text)):
         l = l.strip('\n')
         if l == 'READY': # end of parse
-            return
+            break
         elif not l: # end of sentence
             sid += 1
         else:
             tid, token, lemma, morph, pos, conf, ner, chunk, parent_tid, dependency = l.split("\t")
             pos1 = _POSMAP[pos.split("(")[0]]
-            yield dict(id=i, sentence=sid, word=token, lemma=lemma,
-                       pos=pos, pos1=pos1, pos_confidence=float(conf))
+            tokens.append(dict(id=i, sentence=sid, word=token, lemma=lemma,
+                               pos=pos, pos1=pos1, pos_confidence=float(conf)))
+            print ">>", ner
+            if ner.startswith("B-"):
+                type = ner.split("_")[0].split("-")[-1]
+                entities.append({'tokens': [], 'type': type})
+            if ner != "O":
+                entities[-1]['tokens'].append(i)
+    return tokens, entities
 
 def tadpole_saf(text):
-    tokens = list(tadpole(text))
+    tokens, entities = tadpole(text)
     return {"header" : {'format': "SAF",
                       'format-version': "0.0",
                       'processed': [{'module': "tadpole",

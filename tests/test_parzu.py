@@ -39,6 +39,7 @@ TEST_CONLL = """1	Wer	wer	PRO	PWS	_|Nom|Sg	2	pred	_	_
 """
 
 def test_conll_to_saf():
+    _check_parzu()
     saf = conll_to_saf(TEST_CONLL)
     assert_equal({t['sentence'] for t in saf['tokens']}, {1,2})
     tokens = {t['word'] : t['id'] for t in saf['tokens']}
