@@ -55,11 +55,14 @@ def frog(text):
 
 def frog_saf(text):
     tokens, entities = frog(text)
-    return {"header" : {'format': "SAF",
-                      'format-version': "0.0",
-                      'processed': [{'module': "frog",
-                                     "started": datetime.datetime.now().isoformat()}
-                                    ]
-                    },
-            "tokens" : tokens}
+    saf = {"header" : {'format': "SAF",
+                       'format-version': "0.0",
+                       'processed': [{'module': "frog",
+                                      "started": datetime.datetime.now().isoformat()}
+                                 ]
+                   },
+           "tokens" : tokens}
+    if entities:
+        saf['entities'] = entities
+    return saf
     
