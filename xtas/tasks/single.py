@@ -173,14 +173,14 @@ def clauses_en(saf):
     return saf
 
 @app.task
-def tadpole(doc):
+def frog(doc):
     """
     Run a document through the frog server at localhost:9887
     @return: saf article with tokens+lemmata
     """
-    from .tadpole import tadpole_saf
+    from .frog import frog_saf
     text = fetch(doc)
-    return tadpole_saf(text)
+    return frog_saf(text)
 
 @app.task
 def psalm_dummy(doc):

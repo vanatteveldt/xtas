@@ -9,7 +9,7 @@ import socket;
     
 from nose.tools import assert_equal, assert_in
 
-from xtas.tasks.tadpole import tadpole
+from xtas.tasks.frog import frog
 
 def _test_frog(host="localhost", port=9887):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -18,9 +18,9 @@ def _test_frog(host="localhost", port=9887):
         raise SkipTest("No frog server found at {host}:{port}"
                        .format(**locals()))
 
-def test_tadpole():
+def test_frog():
     _test_frog()
-    tokens, entities = tadpole("Mark Rutte werkte gisteren nog bij de  Vrije Universiteit in Amsterdam")
+    tokens, entities = frog("Mark Rutte werkte gisteren nog bij de  Vrije Universiteit in Amsterdam")
     #print "\n".join(map(str, tokens)), "\n", "\n".join(map(str, entities))
     assert_equal(len(tokens), 10)
     assert_equal(tokens[0]['pos1'], 'M')

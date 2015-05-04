@@ -20,7 +20,7 @@ _POSMAP = {"VZ" : "P",
            "" : "?",
 }
 
-def _call_tadpole(text, host="localhost", port=9887):
+def _call_frog(text, host="localhost", port=9887):
     if not isinstance(text, unicode): text = unicode(text)
     text = unidecode(text).encode("utf-8")
     
@@ -31,11 +31,11 @@ def _call_tadpole(text, host="localhost", port=9887):
     return s.makefile('r')
 
 
-def tadpole(text):
+def frog(text):
     if not text.endswith("\n"): text = text + "\n"
     sid = 0
     tokens, entities = [], []
-    for i, l in enumerate(_call_tadpole(text)):
+    for i, l in enumerate(_call_frog(text)):
         l = l.strip('\n')
         if l == 'READY': # end of parse
             break
@@ -54,11 +54,11 @@ def tadpole(text):
                 entities[-1]['tokens'].append(i)
     return tokens, entities
 
-def tadpole_saf(text):
-    tokens, entities = tadpole(text)
+def frog_saf(text):
+    tokens, entities = frog(text)
     return {"header" : {'format': "SAF",
                       'format-version': "0.0",
-                      'processed': [{'module': "tadpole",
+                      'processed': [{'module': "frog",
                                      "started": datetime.datetime.now().isoformat()}
                                     ]
                     },
