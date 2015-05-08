@@ -49,7 +49,7 @@ def frog(text):
             if ner.startswith("B-"):
                 type = ner.split("_")[0].split("-")[-1]
                 entities.append({'tokens': [], 'type': type})
-            if ner != "O":
+            if not ner.startswith("O"):
                 entities[-1]['tokens'].append(i)
     return tokens, entities
 
