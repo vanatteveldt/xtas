@@ -4,7 +4,7 @@ Pipelining with partial caching
 
 import celery
 
-from xtas.tasks.es import _ES_DOC_FIELDS, get_all_results, store_single, fetch, get_multiple_results, adhoc_document
+from xtas.tasks.es import _ES_DOC_FIELDS, get_multiple_results, store_single, fetch, adhoc_document
 from xtas.celery import app
 
 def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
@@ -15,14 +15,24 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     @param store_final: if True, store the final result
     @param store_intermediate: if True, store all intermediate results as well
     """
-
+    
     def normalize_pipe(pipe):
         for task_dict in pipe:
             module = task_dict['module']
             if isinstance(module, (str, unicode)):
                 module = app.tasks[module]
-            yield dict(module=module, arguments=task_dict.get('arguments', {}))
+            yield dict(module=module, output=module.output,
+                       arguments=task_dict.get('arguments', {}))
 
+    def task_name(tasks):
+        return "__".join(t['module'].name.split(".")[-1] for t in tasks)
+
+    def store_task(tasks, doc):
+        taskname = task_name(tasks)
+        properties = tasks[-1]['output']
+        print taskname, "->", properties
+        return store_single.s(taskname, properties, doc['index'], doc['type'], doc['id'])
+            
     def get_chained_task(input, tasks, all_tasks, doc=None):
         """
         Get a celery task with the input and the chained tasks
@@ -35,14 +45,11 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
         chain = [head] + tail
         # Store final result
         if doc and store_final:
-            taskname = "__".join(t['module'].name for t in all_tasks)
-            chain.append(store_single.s(taskname, doc['index'], doc['type'], doc['id']))
+            chain.append(store_task(all_tasks, doc))
         if doc and store_intermediate:
             offset = len(all_tasks) - len(tasks)  # i.e. number of tasks that are already cached
             for i in range(len(tasks)-1, 0, -1):
-                taskname = "__".join(t['module'].name for t in all_tasks[:(i+offset)])
-
-                chain.insert(i, store_single.s(taskname, doc['index'], doc['type'], doc['id']))
+                chain.insert(i, store_task(all_tasks[:(i+offset)], doc))
         return celery.chain(*chain)
 
     tasks = list(normalize_pipe(pipe))
@@ -57,7 +64,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
         if not docs:
             break
         unseen = []
-        taskname = "__".join(t['module'].name for t in tasks[:i])
+        taskname = task_name(tasks[:i])
         for doc, result in get_multiple_results(docs, taskname):
             if result:
                 chain = tasks[i:]
@@ -120,7 +127,7 @@ if __name__ == '__main__':
     parser.add_argument("--always-eager", "-a", help="Don't use celery",
                         action="store_true")
     parser.add_argument("--id", "-i", help="ID of the document to process")
-    parser.add_argument("--index", "-n", help="Elasticsearch index name")
+    parser.add_argument("--index", "-n", help="Elasticsearch index name", default="amcat")
     parser.add_argument("--doctype", "-d", help="Elasticsearch document type", default="article")
     parser.add_argument("--field", "-F", help="Elasticsearch field type", default="text")
     parser.add_argument("--store-intermediate", help="Store intermediate results",

@@ -172,7 +172,7 @@ def clauses_en(saf):
     add_clauses(saf)
     return saf
 
-@app.task
+@app.task(output=["tokens", "entities"])
 def frog(doc):
     """
     Run a document through the frog server at localhost:9887
