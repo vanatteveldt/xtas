@@ -38,7 +38,6 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     def store_task(tasks, doc):
         taskname = _task_name(tasks)
         properties = tasks[-1]['output']
-        print taskname, "->", properties
         return store_single.s(taskname, properties, doc['index'], doc['type'], doc['id'])
             
     def get_chained_task(input, tasks, all_tasks, doc=None):
