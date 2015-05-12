@@ -7,6 +7,25 @@ import celery
 from xtas.tasks.es import _ES_DOC_FIELDS, get_multiple_results, store_single, fetch, adhoc_document
 from xtas.celery import app
 
+def _normalize_pipe(pipe):
+    """
+    Convert a sequence of modules into module/output/arguments dicts
+    """
+    for task_dict in pipe:
+        if isinstance(task_dict, (str, unicode)):
+            module, arguments = task_dict, {}
+        else:
+            module, arguments = task_dict['module'], task_dict.get('arguments', {})
+        if isinstance(module, (str, unicode)):
+            if "." not in module: module = "xtas.tasks.single.{module}".format(**locals())
+            module = app.tasks[module]
+        yield dict(module=module, output=module.output, arguments=arguments)
+
+        
+def _task_name(tasks):
+    return "__".join(t['module'].name.split(".")[-1] for t in tasks)
+
+    
 def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     """
     Pipeline should be a list of dicts, with members task and argument
@@ -16,19 +35,8 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     @param store_intermediate: if True, store all intermediate results as well
     """
     
-    def normalize_pipe(pipe):
-        for task_dict in pipe:
-            module = task_dict['module']
-            if isinstance(module, (str, unicode)):
-                module = app.tasks[module]
-            yield dict(module=module, output=module.output,
-                       arguments=task_dict.get('arguments', {}))
-
-    def task_name(tasks):
-        return "__".join(t['module'].name.split(".")[-1] for t in tasks)
-
     def store_task(tasks, doc):
-        taskname = task_name(tasks)
+        taskname = _task_name(tasks)
         properties = tasks[-1]['output']
         print taskname, "->", properties
         return store_single.s(taskname, properties, doc['index'], doc['type'], doc['id'])
@@ -52,7 +60,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
                 chain.insert(i, store_task(all_tasks[:(i+offset)], doc))
         return celery.chain(*chain)
 
-    tasks = list(normalize_pipe(pipe))
+    tasks = list(_normalize_pipe(pipe))
 
     todo = []
     cached = []
@@ -64,7 +72,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
         if not docs:
             break
         unseen = []
-        taskname = task_name(tasks[:i])
+        taskname = _task_name(tasks[:i])
         for doc, result in get_multiple_results(docs, taskname):
             if result:
                 chain = tasks[i:]
