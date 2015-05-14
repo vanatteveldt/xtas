@@ -11,13 +11,15 @@ Download from http://www.let.rug.nl/vannoord/alp/Alpino/binary/versions/
 import subprocess
 import logging
 import os
+import re
+
 import unidecode
 
 from xtas.tasks.saf import SAF
 
 log = logging.getLogger(__name__)
 
-CMD_PARSE = ["bin/Alpino", "end_hook=dependencies", "-parse"]
+CMD_PARSE = ["bin/Alpino", "end_hook=triples_with_frames", "-parse"]
 CMD_TOKENIZE = ["Tokenization/tok"]
 
 
@@ -26,7 +28,7 @@ def parse_text(text):
 
     tokens = tokenize(text, alpino_home)
     parse = parse_raw(tokens, alpino_home)
-    return interpret_parse(parse)
+    return interpret_parse(tokens, parse)
 
 
 def tokenize(text, alpino_home):
@@ -51,96 +53,86 @@ def parse_raw(tokens, alpino_home):
     return parse
 
 
-def interpret_parse(parse):
+def interpret_parse(tokens, parse):
     article = SAF()
     article.set_header("xtas.tasks.single.alpino",
                        "Alpino-x86_64-linux-glibc2.5-20214")
+
+    words = {} # {sid, offset: term}
+    
+    for sid, sent in enumerate(tokens.split("\n")):
+        if sent and sent.strip():
+            for i, word in enumerate(sent.split(" ")):
+                words[sid+1, i] = word
+
     tokens = {}  # {sid, offset: term}
 
     for line in parse.split("\n"):
         if not line.strip():
             continue
+                    
         line = line.strip().split("|")
         sid = int(line[-1])
-        if len(line) != 16:
+        if len(line) != 6:
             raise ValueError("Cannot interpret line %r, has %i parts "
-                             "(needed 16)" % (line, len(line)))
-        parent = interpret_token(tokens, sid, *line[:7])
-        child = interpret_token(tokens, sid, *line[8:15])
-        func, rel = line[7].split("/")
+                             "(needed 6)" % (line, len(line)))
+        func, rel = line[2].split("/")
+        if func == "top": # ignore the link to 'top'
+            continue 
+        parent = interpret_token(tokens, words, sid, *line[:2])
+        child = interpret_token(tokens, words, sid, *line[3:5])
         dep = dict(child=child['id'], parent=parent['id'], relation=rel)
         article.dependencies.append(dep)
     article.tokens = tokens.values()
     return article
 
 
-def interpret_token(tokens, sid,
-                    lemma, word, begin, _end, major_pos, _pos2, pos):
-    begin = int(begin)
+def interpret_token(tokens, words, sid, lemma_position, pos):
+    if lemma_position == "top/top":
+        return None
+    m = re.match(r"(.*)/\[(\d+),(\d+)\]", lemma_position)    
+    if not m:
+        raise ValueError("Cannot interpret token {lemma_position}, expected format: word/[start,end]"
+                         .format(**locals()))
+    lemma, begin, end = re.match(r"(.*)/\[(\d+),(\d+)\]", lemma_position).groups()
+    begin, end = int(begin), int(end)
     token = tokens.get((sid, begin))
     if not token:
         if pos == "denk_ik":
-            major, minor = "verb", None
-        elif "(" in pos:
-            major, minor = pos.split("(", 1)
-            minor = minor[:-1]
-        else:
-            major, minor = pos, None
-
-        if "_" in major:
-            m2 = major.split("_")[-1]
-        else:
-            m2 = major
-        cat = POSMAP.get(m2)
+            pos = "verb"
+        word = " ".join(words[sid, i] for i in range(begin, end))
+        cat = POSMAP.get(pos)
         if not cat:
-            raise Exception("Unknown POS: %r (%s/%s/%s/%s)"
-                            % (m2, major, begin, word, pos))
-
+            raise Exception("Unknown POS: {pos} (word: {word}, lemma: {lemma}, sid: {sid}, begin: {begin}"
+                            .format(**locals()))
         tokenid = len(tokens) + 1
-        token = dict(id=tokenid, word=word, lemma=lemma, pos=major_pos,
-                     sentence=sid, offset=begin, pos_major=major,
-                     pos_minor=minor, pos1=cat)
+        token = dict(id=tokenid, word=word, lemma=lemma, pos=pos, pos1=cat,
+                     sentence=sid, offset=begin)
         tokens[sid, begin] = token
     return token
 
+# see http://www.let.rug.nl/vannoord/alp/Alpino/adt.html#postags
+POSMAP = {
+    "adj": 'A', #Adjective
+    "adv": 'B', #Adverb
+    "comp": 'C', #Complementizer
+    "comparative": 'C', #Comparative
+    "det": 'D', #Determiner
+    "fixed": '?', #Fixed part of a fixed expression
+    "name": 'M', #Name
+    "noun": 'N', #Noun
+    "num": 'Q', #Number
+    "part": 'R', #Particle
+    "pron": 'O', #Pronoun
+    "prep": 'P', #Preposition
+    "punct": '.', #Punctuation
+    "verb": 'V', #Verb
+    "vg": 'C', #Conjunction
 
-POSMAP = {"pronoun": 'O',
-          "verb": 'V',
-          "noun": 'N',
-          "preposition": 'P',
-          "determiner": "D",
-          "comparative": "C",
-          "adverb": "B",
-          'adv': 'B',
-          "adjective": "A",
-          "complementizer": "C",
-          "punct": ".",
-          "conj": "C",
-          "tag": "?",
-          "particle": "R",
-          "name": "M",
-          "part": "R",
-          "intensifier": "B",
-          "number": "Q",
-          "cat": "Q",
-          "n": "Q",
-          "reflexive":  'O',
-          "conjunct": 'C',
-          "pp": 'P',
-          'anders': '?',
-          'etc': '?',
-          'enumeration': '?',
-          'np': 'N',
-          'p': 'P',
-          'quant': 'Q',
-          'sg': '?',
-          'zo': '?',
-          'max': '?',
-          'mogelijk': '?',
-          'sbar': '?',
-          '--': '?',
-          }
-
+    # Tags not found in docs:
+    "pp": 'P', # 'daaruit'
+}
+    
 
 if __name__ == '__main__':
     import sys

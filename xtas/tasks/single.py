@@ -134,7 +134,7 @@ def semafor(saf):
 
 
 
-@app.task
+@app.task(output=["tokens", "dependencies"])
 def alpino(doc):
     # Output: saf article
     # Requires ALPINO_HOME to point to the stanford corenlp folder

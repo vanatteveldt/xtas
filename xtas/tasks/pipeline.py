@@ -152,11 +152,11 @@ if __name__ == '__main__':
 
     # input
     if args.input_file is not None:
-        doc = open(args.input_file).read()
+        doc = open(args.input_file).read().decode("utf-8")
     elif args.id is not None:
         doc = es_document(args.index or "amcat", args.doctype, args.id, fields)
     else:
-        doc = sys.stdin.read()
+        doc = sys.stdin.read().decode("utf-8")
 
     if args.id is None and args.cache_adhoc:
         doc = adhoc_document(args.index or "adhoc", args.doctype, fields, doc)
