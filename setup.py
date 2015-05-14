@@ -18,10 +18,8 @@ setup(
     install_requires=[
         "celery>=3.0.0",
         "flask>=0.10.1",
-        #"langid>=1.1.4dev",
         "nltk",
-        "rawes",
-        #"simplejson>=2.6.2",
+        "elasticsearch",
     ],
     extras_requires={
         "clustering": "scikit-learn>=0.13",
