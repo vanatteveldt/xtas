@@ -31,8 +31,10 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--host', default='localhost')
+    parser.add_argument('--port', type=int, default=9200)
     parser.add_argument('--index', default='amcat')
     parser.add_argument('--parent-doctype', default='article' )
+    parser.add_argument('--field', default='headline,text' )
     parser.add_argument('--n', type=int, default=25)
     parser.add_argument('--verbose',  action='store_true')
     parser.add_argument('--norepeat', action='store_true')
@@ -45,10 +47,13 @@ if __name__ == '__main__':
 
     logging.basicConfig(format='[%(asctime)s %(levelname)s %(name)s:%(lineno)s %(threadName)s] %(message)s', level=logging.INFO if args.verbose else logging.WARN)
     
+    fields = [x.strip() for x in args.field.split(",")]
+    
     from xtas.celery import app
     app.conf['CELERY_ALWAYS_EAGER'] = True
 
-    es._es = Elasticsearch(hosts=[{"host":args.host, "port": 9200}], timeout=600)
+    logging.warn("Connecting to elastic at {args.host}:{args.port}".format(**locals()))
+    es._es = Elasticsearch(hosts=[{"host":args.host, "port": args.port}], timeout=600)
 
     pipe = list(_normalize_pipe(args.modules))
     doctype = "{typ}__{taskname}".format(typ=args.parent_doctype, taskname=_task_name(pipe))
@@ -68,7 +73,7 @@ if __name__ == '__main__':
                 continue
         if not aids:
             break
-        docs = [es_document(args.index, args.parent_doctype, aid, "text")
+        docs = [es_document(args.index, args.parent_doctype, aid, fields)
                 for aid in aids]
 
         for i, doc in enumerate(docs):
