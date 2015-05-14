@@ -19,7 +19,7 @@ from xtas.tasks.saf import SAF
 
 log = logging.getLogger(__name__)
 
-CMD_PARSE = ["bin/Alpino", "end_hook=triples_with_frames", "-parse"]
+CMD_PARSE = ["bin/Alpino", "-fast", "end_hook=triples_with_frames", "-parse"]
 CMD_TOKENIZE = ["Tokenization/tok"]
 
 
@@ -128,9 +128,11 @@ POSMAP = {
     "punct": '.', #Punctuation
     "verb": 'V', #Verb
     "vg": 'C', #Conjunction
-
+    
     # Tags not found in docs:
     "pp": 'P', # 'daaruit'
+    "tag": "?", # 'Kortom'
+
 }
     
 

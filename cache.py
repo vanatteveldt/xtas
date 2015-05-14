@@ -52,6 +52,10 @@ if __name__ == '__main__':
     from xtas.celery import app
     app.conf['CELERY_ALWAYS_EAGER'] = True
 
+    if args.n < 0:
+        args.n = -args.n
+        args.norepeat = True
+    
     logging.warn("Connecting to elastic at {args.host}:{args.port}".format(**locals()))
     es._es = Elasticsearch(hosts=[{"host":args.host, "port": args.port}], timeout=600)
 
