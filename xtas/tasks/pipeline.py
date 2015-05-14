@@ -148,16 +148,18 @@ if __name__ == '__main__':
                     help="Output file. If not given, will write to stdout")
     args = parser.parse_args()
 
+    fields = [x.strip() for x in args.field.split(",")]
+
     # input
     if args.input_file is not None:
         doc = open(args.input_file).read()
     elif args.id is not None:
-        doc = es_document(args.index or "amcat", args.doctype, args.id, args.field)
+        doc = es_document(args.index or "amcat", args.doctype, args.id, fields)
     else:
         doc = sys.stdin.read()
 
     if args.id is None and args.cache_adhoc:
-        doc = adhoc_document(args.index or "adhoc", args.doctype, args.field, doc)
+        doc = adhoc_document(args.index or "adhoc", args.doctype, fields, doc)
 
     # pipeline
     if '[' in args.module[0] or '{' in args.module[0]:

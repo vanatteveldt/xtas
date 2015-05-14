@@ -31,13 +31,19 @@ def fetch(doc):
         A dictionary representing a handle returned by es_document, or a plain
         string.
     """
-    if isinstance(doc, dict) and set(doc.keys()) == set(_ES_DOC_FIELDS):
-        idx, typ, id, field = [doc[k] for k in _ES_DOC_FIELDS]
-        text = _es.get_source(index=idx, doc_type=typ, id=id)[field]
-        if not (text and text.strip()):
-            return ""
+    def get_text(src, field):
+        # get the text from the field, default ignore new lines except for paragraph markers
+        text = src[field]
+        if not (text and text.strip()): return ""
         return "\n".join(re.sub("\s+"," ", para)
                          for para in text.split("\n\n"))
+    if isinstance(doc, dict) and set(doc.keys()) == set(_ES_DOC_FIELDS):
+        idx, typ, id, field = [doc[k] for k in _ES_DOC_FIELDS]
+        if isinstance(field, (str, unicode)):
+            field = [field]
+        src = _es.get_source(index=idx, doc_type=typ, id=id)
+        text = [get_text(src, f) for f in field]
+        return "\n".join(t for t in text if t)
     else:
         # Assume simple string
         return doc
