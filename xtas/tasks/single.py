@@ -144,18 +144,15 @@ def alpino(doc):
     return parse_text(text)
 
 
-@app.task
+@app.task(output=["tokens", "dependencies", "sources"])
 def sources_nl(saf):
     # Input: saf article with dependencies (alpino output)
     # Output: saf article with dependencies and sources
     # Requires syntaxrules to be on the PYTHONATH
     # Requires a sparql server running on http://localhost:3030/x
     # See https://github.com/vanatteveldt/syntaxrules/
-    from syntaxrules.sources import get_sources_nl
-    sources = [{role: [int(n.id) for n in nodes] for (role, nodes) in source.iteritems()}
-               for source in get_sources_nl(saf)]
-    saf['sources'] = sources
-    return saf
+    from ._sources_nl import add_quotes
+    return add_quotes(saf)
 
 @app.task(output=['tokens', 'entities', 'dependencies', 'coreferences', 'trees', 'sources'])
 def sources_en(saf):
@@ -165,6 +162,13 @@ def sources_en(saf):
     add_quotes(saf)
     return saf
 
+@app.task(output=["tokens", "dependencies", "sources", "clauses"])
+def clauses_nl(saf):
+    # Input: saf article with dependencies (corenlp output) and optional sources
+    # Output: saf article with clauses added
+    from ._sources_nl import add_clauses
+    return add_clauses(saf)
+    
 @app.task
 def clauses_en(saf):
     # Input: saf article with dependencies (corenlp output) and optional sources

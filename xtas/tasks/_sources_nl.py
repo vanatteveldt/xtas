@@ -104,7 +104,10 @@ def get_multi_quotes(saf, sentence):
         previous = sentence - 2
     else:
         return # no quote found
-    root = saf.get_root(sentence)
+    try:
+        root = saf.get_root(sentence)
+    except ValueError:
+        return# multiple roots - too complicated for now
     quotes = list(get_regular_quotes(saf, previous))
     if quotes: # source of first quote is source
         return (quotes[0][0], root)
