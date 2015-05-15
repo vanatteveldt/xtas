@@ -1,4 +1,4 @@
-from saf import SAF
+from saf.saf import SAF
 import collections
 import logging
 
@@ -8,89 +8,6 @@ QUOTE_MARKS = {'``', "''", '`', "'", '"'}
 ACTION_NOUNS= {"attack","bombardment","bombing","ambush","strike","raid","invasion","mission","offensive","occupation","assault","aggression","war","kill","massacre","slaughter","assassination","destruction","operation"}
 ACTOR_ENTITIES = {"PERSON", "MISC", "ORGANIZATION"}
 
-class SAF(object):
-    def __init__(self, saf):
-        self.saf = saf
-        self._tokens = {t['id']: t for t in saf['tokens']}
-        self._children = None # cache token : [(rel, child), ...]
-
-
-    def get_token(self, token_id):
-        return self._tokens[token_id]
-
-    def get_children(self, token):
-        if not isinstance(token, int): token = token['id']
-        if self._children is None:
-            self._children = collections.defaultdict(list)
-            for rel in self.saf['dependencies']:
-                self._children[rel['parent']].append((rel['relation'], self.get_token(rel['child'])))
-        return self._children[token]
-
-    def get_parent(self, token):
-        if not isinstance(token, int): token = token['id']
-        for rel in self.saf['dependencies']:
-            if rel['child'] == token:
-                return rel['relation'], self.get_token(rel['parent'])
-
-    def get_tokens(self, sentence):
-        return sorted((t for t in self.saf['tokens'] if t['sentence'] == sentence),
-                      key = lambda t: int(t['offset']))
-
-    def get_entity(self, token):
-        if not isinstance(token, int): token = token['id']
-        if 'entities' in self.saf:
-            for entity in self.saf['entities']:
-                if token in entity['tokens']:
-                    return entity['type']
-
-
-
-    def get_root(self, sentence):
-        parents = {d['child'] : d['parent'] for d in self.saf['dependencies']
-                   if self.get_token(d['child'])['sentence'] == sentence}
-        # root is a parent that has no parents
-        roots = set(parents.values()) - set(parents.keys())
-        if len(roots) != 1:
-            raise ValueError("Sentence {sentence} has roots {roots}, parents {parents}".format(**locals()))
-        return self.get_token(list(roots)[0])
-
-    def get_sentences(self):
-        return sorted({t['sentence'] for t in self.saf['tokens']})
-
-    def get_node_depths(self, sentence):
-        # return a dict with the dept of each node
-        rels = [d for d in self.saf['dependencies']
-            if self.get_token(d['child'])['sentence'] == sentence]
-        if not rels:
-            return {}
-        generations = {self.get_root(sentence)['id'] : 0}
-        changed = True
-        while changed:
-            changed = False
-            for rel in rels:
-                if rel['child'] not in generations and rel['parent'] in generations:
-                    generations[rel['child']] = generations[rel['parent']] + 1
-                    changed = True
-        return generations
-
-    def get_descendants(self, node, exclude=None):
-        """
-        Yield all descendants (including the node itself),
-        stops when a node in exclude is reached
-        @param exlude: a set of nodes to exclude
-        """
-        if isinstance(node, int): node = self.get_token(node)
-        if exclude is None: exclude = set()
-        exclude = {n if isinstance(n, int) else n['id'] for n in exclude}
-        if node['id'] in exclude: return
-        exclude.add(node['id'])
-        yield node
-        for _rel, child in self.get_children(node):
-            for descendant in self.get_descendants(child, exclude):
-                yield descendant
-
-    def is_descendant(self, node, possible_ancestor):
-        return any(node == descendant['id'] for descendant in self.get_descendants(possible_ancestor))
 
 def first(seq):
     return next(iter(seq), None)
@@ -186,14 +103,16 @@ def get_quote_dicts(saf, quotes):
     for src, quote in quotes:
         yield
 
-def add_quotes(saf_dict):
-    saf = SAF(saf_dict)
+def add_quotes(saf):
+    if isinstance(saf, dict): 
+        saf = SAF(saf)
+    print saf.__module__
     def expand(node, exclude):
         return [n['id'] for n in saf.get_descendants(node, exclude={exclude['id']})]
-    saf_dict['sources'] = [{"source": expand(src, quote),
-                           "quote": expand(quote, src)}
-                          for (src, quote) in get_quotes(saf)]
-    return saf_dict
+    saf.sources = [{"source": expand(src, quote),
+                    "quote": expand(quote, src)}
+                   for (src, quote) in get_quotes(saf)]
+    return saf.saf_dict
 
 def get_clauses(saf):
     if 'dependencies' not in saf.saf: return
@@ -282,6 +201,6 @@ def add_clauses(saf_dict):
     clauses = get_clauses(saf)
     clauses = add_nominal_clauses(saf, clauses)
     clauses = prune_clauses(saf, clauses)
-    saf_dict['clauses'] = [make_clause(s, p) for (s,p) in clauses]
+    saf.clauses = [make_clause(s, p) for (s,p) in clauses]
 
-    return saf_dict
+    return saf.saf

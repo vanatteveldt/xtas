@@ -103,7 +103,7 @@ def parzu(doc):
     return conll_to_saf(parse(text))
 
     
-@app.task
+@app.task(output=['tokens', 'entities', 'dependencies', 'coreferences', 'trees'])
 def corenlp(doc):
     # Output: saf article with trees
     # Requires CORENLP_HOME to point to the stanford corenlp folder
@@ -111,13 +111,14 @@ def corenlp(doc):
     text = fetch(doc)
     return stanford_to_saf(parse(text))
 
-@app.task
+
+@app.task(output=['tokens', 'entities'])
 def corenlp_lemmatize(doc):
     # Output: saf article with tokens only
     # Requires CORENLP_HOME to point to the stanford corenlp folder
     from .corenlp import parse, stanford_to_saf
     text = fetch(doc)
-    result = parse(text, annotators=["tokenize", "ssplit", "pos", "lemma"], memory="512M")
+    result = parse(text, annotators=["tokenize", "ssplit", "pos", "lemma", "ner"], memory="700M")
     return stanford_to_saf(result)
 
 @app.task
@@ -156,7 +157,7 @@ def sources_nl(saf):
     saf['sources'] = sources
     return saf
 
-@app.task
+@app.task(output=['tokens', 'entities', 'dependencies', 'coreferences', 'trees', 'sources'])
 def sources_en(saf):
     # Input: saf article with dependencies (corenlp output)
     # Output: saf article with dependencies and sources

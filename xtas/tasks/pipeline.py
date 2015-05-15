@@ -114,10 +114,12 @@ if __name__ == '__main__':
     import argparse
     import sys
     import json
+    import logging
 
     from xtas.tasks.es import es_document
     from xtas.tasks import app
 
+    
 
     epilog = '''The modules for the pipeline can be either the names of
                 one or more modules, or a json string containing modules
@@ -134,6 +136,7 @@ if __name__ == '__main__':
     parser.add_argument("--always-eager", "-a", help="Don't use celery",
                         action="store_true")
     parser.add_argument("--id", "-i", help="ID of the document to process")
+    parser.add_argument("--verbose", "-v", help="Set logging level to INFO")
     parser.add_argument("--index", "-n", help="Elasticsearch index name", default="amcat")
     parser.add_argument("--doctype", "-d", help="Elasticsearch document type", default="article")
     parser.add_argument("--field", "-F", help="Elasticsearch field type", default="text")
@@ -148,6 +151,8 @@ if __name__ == '__main__':
                     help="Output file. If not given, will write to stdout")
     args = parser.parse_args()
 
+    logging.basicConfig(format='[%(asctime)s %(levelname)s %(name)s:%(lineno)s %(threadName)s] %(message)s', level=logging.INFO if args.verbose else logging.WARN)
+    
     fields = [x.strip() for x in args.field.split(",")]
 
     # input

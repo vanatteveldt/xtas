@@ -12,26 +12,24 @@ import subprocess
 import logging
 import os
 import re
+import datetime
 
 import unidecode
 
-from xtas.tasks.saf import SAF
-
 log = logging.getLogger(__name__)
 
-CMD_PARSE = ["bin/Alpino", "-fast", "end_hook=triples_with_frames", "-parse"]
+CMD_PARSE = ["bin/Alpino", "-veryfast", "end_hook=triples_with_frames", "-parse"]
 CMD_TOKENIZE = ["Tokenization/tok"]
 
 
-def parse_text(text):
-    alpino_home = os.environ['ALPINO_HOME']
+def parse_text(text, alpino_home=os.environ.get('ALPINO_HOME')):
 
     tokens = tokenize(text, alpino_home)
     parse = parse_raw(tokens, alpino_home)
     return interpret_parse(tokens, parse)
 
 
-def tokenize(text, alpino_home):
+def tokenize(text, alpino_home=os.environ.get('ALPINO_HOME')):
     if not isinstance(text, unicode):
         text = text.decode("ascii")
     
@@ -45,18 +43,35 @@ def tokenize(text, alpino_home):
     return tokens
 
 
-def parse_raw(tokens, alpino_home):
+def parse_raw(tokens, alpino_home=os.environ.get('ALPINO_HOME')):
     p = subprocess.Popen(CMD_PARSE, shell=False,
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          cwd=alpino_home, env={'ALPINO_HOME': alpino_home})
     parse, err = p.communicate(tokens)
     return parse
 
+def get_alpino_version():
+    alpino_home = os.environ.get("ALPINO_HOME")
+    if not alpino_home:
+        raise Exception("ALPINO_HOME not set")
+    version_file = os.path.join(alpino_home, "version")
+    if not os.path.exists(version_file):
+        raise Exception("Alpino not found at ALPINO_HOME={alpino_home}".format(**locals()))
+    return open(version_file).read().strip()
+        
+    
 
+def get_header():
+     return {'format': "SAF",
+             'format-version': "0.0",
+             'processed':  {'module': "alpino",
+                            'module-version': get_alpino_version(),
+                            "started": datetime.datetime.now().isoformat()}
+             }
+     
 def interpret_parse(tokens, parse):
-    article = SAF()
-    article.set_header("xtas.tasks.single.alpino",
-                       "Alpino-x86_64-linux-glibc2.5-20214")
+    saf = {'header': get_header(),
+           'dependencies': []}
 
     words = {} # {sid, offset: term}
     
@@ -82,9 +97,9 @@ def interpret_parse(tokens, parse):
         parent = interpret_token(tokens, words, sid, *line[:2])
         child = interpret_token(tokens, words, sid, *line[3:5])
         dep = dict(child=child['id'], parent=parent['id'], relation=rel)
-        article.dependencies.append(dep)
-    article.tokens = tokens.values()
-    return article
+        saf['dependencies'].append(dep)
+    saf['tokens'] = tokens.values()
+    return saf
 
 
 def interpret_token(tokens, words, sid, lemma_position, pos):
