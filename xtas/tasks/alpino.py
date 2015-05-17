@@ -148,6 +148,8 @@ POSMAP = {
     "pp": 'P', # 'daaruit'
     "tag": "?", # 'Kortom'
     "prefix": "?", # software-
+    "--": "?", # bizar, bv *Van* oudsher geniet UKIP vooral steun, artikel 81935839
+    "max": "?", # 'niks mis mee'
 }
     
 
