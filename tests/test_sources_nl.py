@@ -1,5 +1,5 @@
 """
-Test the CoreNLP parser/lemmatizer functions and task.
+Test the Dutch sources and clauses extraction.
 """
 
 import logging

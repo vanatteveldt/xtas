@@ -169,7 +169,7 @@ def clauses_nl(saf):
     from ._sources_nl import add_clauses
     return add_clauses(saf)
     
-@app.task
+@app.task(output=['tokens', 'entities', 'dependencies', 'coreferences', 'trees', 'sources', 'clauses'])
 def clauses_en(saf):
     # Input: saf article with dependencies (corenlp output) and optional sources
     # Output: saf article with clauses added
