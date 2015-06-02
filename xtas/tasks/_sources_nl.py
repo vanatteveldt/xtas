@@ -19,13 +19,13 @@ def get_regular_quote_nl(saf, token):
             src = saf.get_child(uit, "obj1")
             if src and quote:
                 return (src, quote)
-    
+
     if token['lemma'] in VOLGENS: # volgens x is bla
         src = saf.get_child(token, "obj1")
         rel, quote = saf.get_parent(token)
-        if src and rel in {"mod", "tag"}: 
+        if src and rel in {"mod", "tag"}:
             return (src, quote)
-    
+
     if token['lemma'] in VIND_VERBS: # a zegt: bla (was: say_verbs)
         rel, parent = saf.get_parent(token)
         if rel and rel.strip() == "--" and parent['lemma'].strip() in QPUNC:
@@ -33,8 +33,8 @@ def get_regular_quote_nl(saf, token):
             quote = saf.get_child(token, "nucl")
             if src and quote:
                 return (src, quote)
-        
-    if token['lemma'] in VIND_VERBS: 
+
+    if token['lemma'] in VIND_VERBS:
         src = saf.get_child(token, "su", "agent")
         if src:
             dat = saf.get_child(token, "vc", lemma='dat')
@@ -49,7 +49,7 @@ def get_regular_quote_nl(saf, token):
 
 def get_colon_quote_nl(saf, sentence):
     for token in saf.get_tokens(sentence):
-        if token['lemma'].strip() in QPUNC:  # a: bla 
+        if token['lemma'].strip() in QPUNC:  # a: bla
             source = saf.get_child(token, " --")
             if source and source['pos1'] != '.':
                 quote =  saf.get_child(source, "tag", "nucl", "sat")
@@ -60,71 +60,10 @@ def get_colon_quote_nl(saf, sentence):
 QUOTE_FUNCTIONS = [_sources.get_token_quotes(get_regular_quote_nl),
                    get_colon_quote_nl]
 
-                    
+
 def add_quotes(saf):
     return _sources.add_quotes(saf, QUOTE_FUNCTIONS)
 
-    
-def get_clauses(saf):
-    if 'dependencies' not in saf.saf: return
-    sources = set()
-    if 'sources' in saf.saf:
-        # skip existing sources
-        for quote in saf.saf['sources']:
-            sources |= set(quote['source'])
-
-    surels = [rel for rel in saf.saf['dependencies']
-              if  rel['relation'] in ('su', 'agent') and rel['child'] not in sources]
-    predicates = {rel['parent'] for rel in surels}
-    for pred in predicates:
-        children = {rel['child'] for rel in surels if rel['parent'] == pred}
-        # eliminate children who are descendant of other children
-        for child in children:
-            others = {c for c in children if c != child}
-            if not any(saf.is_descendant(child, c) for c in others):
-                yield child, pred
-
-
-def prune_clauses(saf, clauses):
-    def is_contained(node, others):
-        for other in others:
-            if node == other: continue
-            if node in {n['id'] for n in saf.get_descendants(other)}:
-                return True
-
-    # if two clauses have the same subject, and the predicate of B is a subset of A, drop B
-    clauses_per_subject = collections.defaultdict(list)
-    for s, p in clauses:
-        clauses_per_subject[s].append(p)
-    for s, ps in clauses_per_subject.iteritems():
-        for p in ps:
-            i = is_contained(p, ps)
-            if not is_contained(p, ps):
-                yield s, p
 
 def add_clauses(saf):
-    if isinstance(saf, dict):
-        saf = SAF(saf)
-    def make_clause(subj, pred):
-        # i.e. in case of tie, node goes to subject, so expand subject first and use all to exclude
-
-        subj = [n['id'] for n in saf.get_descendants(subj, exclude={pred})] if subj else []
-        pred = [n['id'] for n in saf.get_descendants(pred, exclude=set(subj))]
-        return {"subject": subj, "predicate": pred}
-    clauses = get_clauses(saf)
-    clauses = prune_clauses(saf, clauses)
-    saf.clauses = [make_clause(s, p) for (s,p) in clauses]
-
-    return saf.saf
-
-
-def add_quotes(saf):
-    if isinstance(saf, dict): 
-        saf = SAF(saf)
-    saf = saf.resolve_passive()
-    def expand(node, exclude):
-        return [n['id'] for n in saf.get_descendants(node, exclude={exclude['id']})]
-    saf.sources = [{"source": expand(src, quote),
-                    "quote": expand(quote, src)}
-                   for (src, quote) in get_quotes(saf)]
-    return saf.saf
+    return _sources.add_clauses(saf)

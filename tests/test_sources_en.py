@@ -37,7 +37,7 @@ def get_saf(sentence):
     saf = stanford_to_saf(get_parse_xml(sentence))
     open("/tmp/tree.png", "w").write(visualize.get_graphviz(SAF(saf)).draw(format='png', prog='dot'))
     return saf
-        
+
 def test_sources():
     _check_corenlp()
     def _test(sentence, source, quote=None):
@@ -83,17 +83,14 @@ def _lemmata(saf, tokens):
     tokens = [(saf.get_token(t) if isinstance(t, int) else t) for t in tokens]
     tokens = sorted(tokens, key=lambda t:(t['sentence'], t['offset']))
     return " ".join(t['word'] for t in tokens)
-    
+
 def test_multiline():
     _check_corenlp()
     sent = 'John told me he was confused. "I think he killed me. Why did he do that?"'
-    
+
     saf = SAF(add_quotes(get_saf(sent)))
 
     assert_equal(len(saf.sources), 3)
-    
+
     quotes = {(_lemmata(saf, src['source']), _lemmata(saf, src['quote'])) for src in saf.sources}
     assert_equal(quotes, {("John", "he was confused"), ("John", 'I think he killed me'), ("John", "Why did he do that")})
-
-    
-
