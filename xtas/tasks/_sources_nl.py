@@ -11,7 +11,7 @@ QUOTES = {'"', "'", "''", "`", "``"}
 QPUNC = QUOTES | {":"}
 
 
-def get_regular_quote(saf, token):
+def get_regular_quote_nl(saf, token):
     if token['lemma'] == "blijk": # x blijkt uit y
         quote = saf.get_child(token, "su", "agent")
         uit = saf.get_child(token, "pc", lemma="uit")
@@ -47,7 +47,7 @@ def get_regular_quote(saf, token):
                 if rel == "tag":
                     return (src, parent)
 
-def get_colon_quote(saf, sentence):
+def get_colon_quote_nl(saf, sentence):
     for token in saf.get_tokens(sentence):
         if token['lemma'].strip() in QPUNC:  # a: bla 
             source = saf.get_child(token, " --")
@@ -57,83 +57,12 @@ def get_colon_quote(saf, sentence):
                     return (source, quote)
 
 
-# TODO: refactor to get rid of copypasta from sources_en
+QUOTE_FUNCTIONS = [_sources.get_token_quotes(get_regular_quote_nl),
+                   get_colon_quote_nl]
 
                     
-def get_regular_quotes(saf, sentence):
-    for t in saf.get_tokens(sentence):
-        q = get_regular_quote(saf, t)
-        if q: yield q
-
-
-def start_quote(saf, sentence):
-    t = saf.get_tokens(sentence)
-    return t and (t[0]['lemma'] in QUOTES)
-
-def end_quote(saf, sentence):
-    t = saf.get_tokens(sentence)
-    return t and (t[-1]['lemma'] in QUOTES)
-
-def middle_quote(saf, sentence):
-    t = saf.get_tokens(sentence)
-    return t and any(t['lemma'] in QUOTES for t in saf.get_tokens(sentence)[1:-1])
-
-
-def first(seq):
-    return next(iter(seq), None)
-    
-def get_top_subject(saf, sentence):
-    subjects = [rel['child'] for rel in saf.saf['dependencies']
-                if rel['relation'] in ('su', 'agent')]
-    if subjects:
-        depths = saf.get_node_depths(sentence)
-        if depths:
-            return saf.get_token(first(sorted(subjects, key=lambda su: depths.get(su, 99999999))))
-
-
-def get_multi_quotes(saf, sentence):
-    if middle_quote(saf, sentence):
-        return # too complicated for now
-    if start_quote(saf, sentence):
-        previous = sentence - 1
-    elif end_quote(saf, sentence) and (start_quote(saf, sentence-1)):
-        previous = sentence - 2
-    elif end_quote(saf, sentence) and (start_quote(saf, sentence-2)):
-        previous = sentence - 3
-    elif start_quote(saf, sentence-1) and end_quote(saf, sentence+1):
-        previous = sentence - 2
-    else:
-        return # no quote found
-    try:
-        root = saf.get_root(sentence)
-    except ValueError:
-        return# multiple roots - too complicated for now
-    quotes = list(get_regular_quotes(saf, previous))
-    if quotes: # source of first quote is source
-        return (quotes[0][0], root)
-    else: # subject of previous sentence is source
-        src = get_top_subject(saf, previous)
-        if src:
-            return src, root
-
-
-        
-def get_quotes(saf):
-    for s in saf.get_sentences():
-        found = False
-        for quote in get_regular_quotes(saf, s):
-            found = True
-            yield quote
-        if not found:
-            quote = get_colon_quote(saf, s)
-            if quote:
-                yield quote
-        if not found:
-            quote = get_multi_quotes(saf, s)
-            if quote:
-                yield quote
-            
-
+def add_quotes(saf):
+    return _sources.add_quotes(saf, QUOTE_FUNCTIONS)
 
     
 def get_clauses(saf):
