@@ -1,3 +1,6 @@
+import saf
+from saf.saf import SAF
+
 import logging
 import json
 import time

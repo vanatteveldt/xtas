@@ -33,6 +33,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
           {"module" : "pos_tag", "arguments" : {"model" : "nltk"}}]
     @param store_final: if True, store the final result
     @param store_intermediate: if True, store all intermediate results as well
+    @return a dict of {doc : {failure: boolean, result: result_or_exception}}
     """
     
     def store_task(tasks, doc):
@@ -61,8 +62,8 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
 
     tasks = list(_normalize_pipe(pipe))
 
-    todo = []
-    cached = []
+    todo = {}
+    result_dict = {}
 
     str_docs = [doc for doc in docs if isinstance(doc, (str, unicode))]
     docs = [doc for doc in docs if not isinstance(doc, (str, unicode))]
@@ -78,7 +79,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
                 if chain: # need to run one or more modules
                     todo.append(get_chained_task(result, chain, tasks, doc))
                 else: # result is fully cached
-                    cached.append(result)
+                    result_dict[doc['id']] = {"failure": False, "result": result}
             else:
                 unseen.append(doc)
         docs = unseen
@@ -86,25 +87,34 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     for doc in docs:
         # not done at all
         input=fetch(doc)
-        todo.append(get_chained_task(input, tasks, tasks, doc))
+        todo[doc['id']] = get_chained_task(input, tasks, tasks, doc).apply_async()
     for doc in str_docs:
-        todo.append(get_chained_task(doc, tasks, tasks))
+        todo[doc['id']] = get_chained_task(doc, tasks, tasks).apply_async()
 
-    # block on group get.
-    # WARNING:This is not a good idea if the pipeline itself is made a task
-    # Ideally I would just place 'results' and tasks together in a group, but is that possible?
-    calc = celery.group(todo).apply_async().get() if todo else []
-
-    return cached + calc
-
+    # fetch all 'todo' tasks
+    for docid, asyncres in todo.iteritems():
+        try:
+            result_dict[docid] = {"failure": False, "result": asyncres.get()}
+        except:
+            # workaround celery bug https://github.com/celery/celery/issues/2458
+            while asyncres.result is None:
+                asyncres = asyncres.parent
+            result_dict[docid] = {"failure": True, "result": asyncres.result}
+            
+        
+    return result_dict
+    
 def pipeline(doc, pipeline, store_final=True, store_intermediate=False):
     """
     Get the result for a given document.
     """
     results = pipeline_multiple([doc], pipeline, store_final=store_final,
                                 store_intermediate=store_intermediate)
-    return results[0]
-
+    result = results[doc['id']]
+    if result["failure"]:
+        raise Exception(result['result'])
+    else:
+        return result['result']
 
 
 if __name__ == '__main__':
