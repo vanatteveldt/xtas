@@ -26,7 +26,7 @@ def _task_name(tasks):
     return "__".join(t['module'].name.split(".")[-1] for t in tasks)
 
     
-def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
+def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False, block=True, **apply_kwargs):
     """
     Pipeline should be a list of dicts, with members task and argument
     e.g. [{"module" : "tokenize"},
@@ -79,7 +79,7 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
                 if chain: # need to run one or more modules
                     todo.append(get_chained_task(result, chain, tasks, doc))
                 else: # result is fully cached
-                    result_dict[doc['id']] = {"failure": False, "result": result}
+                    result_dict[doc['id']] = {"state": "SUCCESS", "result": result}
             else:
                 unseen.append(doc)
         docs = unseen
@@ -87,31 +87,35 @@ def pipeline_multiple(docs, pipe, store_final=True, store_intermediate=False):
     for doc in docs:
         # not done at all
         input=fetch(doc)
-        todo[doc['id']] = get_chained_task(input, tasks, tasks, doc).apply_async()
+        todo[doc['id']] = get_chained_task(input, tasks, tasks, doc).apply_async(**apply_kwargs)
     for doc in str_docs:
-        todo[doc['id']] = get_chained_task(doc, tasks, tasks).apply_async()
+        todo[doc['id']] = get_chained_task(doc, tasks, tasks).apply_async(**apply_kwargs)
 
-    # fetch all 'todo' tasks
-    for docid, asyncres in todo.iteritems():
-        try:
-            result_dict[docid] = {"failure": False, "result": asyncres.get()}
-        except:
-            # workaround celery bug https://github.com/celery/celery/issues/2458
-            while asyncres.result is None:
-                asyncres = asyncres.parent
-            result_dict[docid] = {"failure": True, "result": asyncres.result}
+    if block:
+        # fetch all 'todo' tasks
+        for docid, asyncres in todo.iteritems():
+            try:
+                result_dict[docid] = {"state": "SUCCESS", "result": asyncres.get()}
+            except:
+                # workaround celery bug https://github.com/celery/celery/issues/2458
+                while asyncres.result is None:
+                    asyncres = asyncres.parent
+                result_dict[docid] = {"state": "FAILURE", "result": asyncres.result}
+    else:
+        for docid, asyncres in todo.iteritems():
+            result_dict[docid] = {"state": "PENDING", "result": asyncres}
             
         
     return result_dict
     
 def pipeline(doc, pipeline, store_final=True, store_intermediate=False):
     """
-    Get the result for a given document.
+    Get the result for a single document.
     """
     results = pipeline_multiple([doc], pipeline, store_final=store_final,
                                 store_intermediate=store_intermediate)
     result = results[doc['id']]
-    if result["failure"]:
+    if result["state"] == "FAILURE":
         raise Exception(result['result'])
     else:
         return result['result']
