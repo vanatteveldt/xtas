@@ -46,8 +46,9 @@ def frog(text):
             pos1 = _POSMAP[pos.split("(")[0]]
             tokens.append(dict(id=i, sentence=sid, word=token, lemma=lemma,
                                pos=pos, pos1=pos1, pos_confidence=float(conf)))
-            if ner.startswith("B-"):
-                type = ner.split("_")[0].split("-")[-1]
+            #HACK, I don't understand how to read multiple NER tags
+            if ner.startswith("B-") or ner.startswith("O_B-"): 
+                type = ner.split("_")[-1].split("-")[-1]
                 entities.append({'tokens': [], 'type': type})
             if not ner.startswith("O"):
                 entities[-1]['tokens'].append(i)
